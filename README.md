@@ -33,6 +33,6 @@ Documentation
 * 014-000644-00 Model 6122 DG/Disc Storage Subsystem Programmers Reference, 1979\
     *Controller registers pp.9-10 (how drive attention flags generate INTs)*
     
-**NOTE**: Good luck!
+**NOTE**: Do not build in the cloned repo. The makefile behaves differently when detects Git. Good luck!
     
 
