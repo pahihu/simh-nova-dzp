@@ -87,24 +87,42 @@
 
 #define USSC_V_COUNT    0                               /* count */
 #define USSC_M_COUNT    017
+
 #define USSC_V_OSECTOR  4                               /* old: sector */
 #define USSC_M_OSECTOR  017
 #define USSC_V_OSURFACE 8                               /* old: surface */
 #define USSC_M_OSURFACE 077
+
 #define USSC_V_NSECTOR  4                               /* new: sector */
 #define USSC_M_NSECTOR  037
 #define USSC_V_NSURFACE 9                               /* new: surface */
 #define USSC_M_NSURFACE 037
+
 #define USSC_V_UNIT     14                              /* unit */
 #define USSC_M_UNIT     03
 #define USSC_UNIT       (USSC_M_UNIT << USSC_V_UNIT)
+
+
+#define USSC_V_COUNT    0
+#define USSC_M_ZCOUNT   037
+#define USSC_V_ZSECTOR  5
+#define USSC_M_ZSECTOR  037
+#define USSC_V_ZSURFACE 10
+#define USSC_M_ZSURFACE 037
+
+#define USSC_V_ZUNIT    5           /* in dkp_fccy */
+#define USSC_M_ZUNIT    03
+
 #define GET_COUNT(x)    (((x) >> USSC_V_COUNT) & USSC_M_COUNT)
+
 #define GET_SECT(x,dt)  ((drv_tab[dt].newf)? \
                         (((x) >> USSC_V_NSECTOR) & USSC_M_NSECTOR): \
                         (((x) >> USSC_V_OSECTOR) & USSC_M_OSECTOR) )
+
 #define GET_SURF(x,dt)  ((drv_tab[dt].newf)? \
                         (((x) >> USSC_V_NSURFACE) & USSC_M_NSURFACE): \
                         (((x) >> USSC_V_OSURFACE) & USSC_M_OSURFACE) )
+
 #define GET_UNIT(x)     (((x) >> USSC_V_UNIT) & USSC_M_UNIT)
 
 /* Flags, command, cylinder register
@@ -119,15 +137,24 @@
 #define FCCY_M_OCMD     3
 #define FCCY_V_OCEX     10                              /* old: cyl extend */
 #define FCCY_OCEX       (1 << FCCY_V_OCEX)
+
 #define FCCY_V_NCYL     0                               /* new: cylinder */
 #define FCCY_M_NCYL     0777
 #define FCCY_V_NCMD     9                               /* new: command */
 #define FCCY_M_NCMD     3
+
+#define FCCY_V_ZCYL     0
+#define FCCY_M_ZCYL     01777
+#define FCCY_V_ZCMD     7
+#define FCCY_M_ZCMD     017
+#define  FCCY_DUMMY     017
+
 #define  FCCY_READ      0
 #define  FCCY_WRITE     1
 #define  FCCY_SEEK      2
 #define  FCCY_RECAL     3
 #define FCCY_FLAGS      0174000                         /* flags */
+
 
 #define GET_CMD(x,dt)   ((drv_tab[dt].newf)? \
                         (((x) >> FCCY_V_NCMD) & FCCY_M_NCMD): \
@@ -144,18 +171,15 @@
                         ((((x) >> FCCY_V_OCYL) & FCCY_M_OCYL) | \
                         ((dt != TYPE_D44)? 0: \
                         (((x) & FCCY_OCEX) >> (FCCY_V_OCEX - FCCY_V_OCMD)))) )
-
-
         /*  (Warning: no sector or surface masking is done!)  */
 
 #define DKP_UPDATE_USSC( type, count, surf, sect )                                      \
                 dkp_ussc = (dkp_ussc & USSC_UNIT)                                       \
                         | ((dkp_ussc + count) & USSC_M_COUNT)                           \
-                        | ((drv_tab[dtype].newf)?                                       \
+                        | ((drv_tab[type].newf)?                                       \
                                 ((surf << USSC_V_NSURFACE) | (sect << USSC_V_NSECTOR)): \
                                 ((surf << USSC_V_OSURFACE) | (sect << USSC_V_OSECTOR))  \
                           );
-
 
 /* Status */
 
@@ -182,6 +206,40 @@
 #define STA_DFLGS       (STA_DONE | STA_SKDN0 | STA_SKDN1 | \
                          STA_SKDN2 | STA_SKDN3)         /* done flags */
 
+#define ZSTA_CNTFUL     0100000
+#define ZSTA_RWDN       0040000     /* STA_DRDY  */
+#define ZSTA_SKDN0      0020000     /* STA_SKDN0 */
+#define ZSTA_SKDN1      0010000     /* STA_SKDN1 */
+#define ZSTA_SKDN2      0004000     /* STA_SKDN2 */
+#define ZSTA_SKDN3      0002000     /* STA_SKDN3 */
+#define ZSTA_PAR        0001000     /* STA_CRC   */
+#define ZSTA_SECADD     0000400     /* STA_XCY | STA_UNS */
+#define ZSTA_ECC        0000200
+#define ZSTA_BADSEC     0000100
+#define ZSTA_CYLADD     0000040     /* STA_CYL */
+#define ZSTA_SECSRF     0000020
+#define ZSTA_VFY        0000010
+#define ZSTA_RWTIM      0000004
+#define ZSTA_DATLAT     0000002     /* STA_DLT */
+#define ZSTA_RWFLT      0000001     /* STA_ERR */
+
+
+#define ZUSTA_INST      0100000
+#define ZUSTA_RES       0040000
+#define ZUSTA_TSP       0020000
+#define ZUSTA_RDY       0010000
+#define ZUSTA_BSY       0004000
+#define ZUSTA_OFF       0002000
+#define ZUSTA_WRDIS     0001000
+#define ZUSTA_ILLADR    0000200
+#define ZUSTA_ILLCMD    0000100
+#define ZUSTA_DCFLT     0000040
+#define ZUSTA_UNS       0000020
+#define ZUSTA_POSFLT    0000010
+#define ZUSTA_CLKFLT    0000004
+#define ZUSTA_WRFLT     0000002
+#define ZUSTA_DRVFLT    0000001
+
 #define GET_SA(cy,sf,sc,t) (((((cy)*drv_tab[t].surf)+(sf))* \
     drv_tab[t].sect)+(sc))
 
@@ -204,6 +262,7 @@
    Century 114  12              20              203             no
    4057 (same as Century 114)
    6103         32              8               192             yes
+   6067         24              5               815             yes
    4231         23              19              411             yes
 
    In theory, each drive can be a different type.  The size field in
@@ -354,6 +413,9 @@ t_stat dkp_boot (int32 unitno, DEVICE *dptr);
 t_stat dkp_attach (UNIT *uptr, char *cptr);
 t_stat dkp_go ( int32 pulse );
 t_stat dkp_set_size (UNIT *uptr, int32 val, char *cptr, void *desc);
+
+int32 dkp_zccy = 0;
+
 
 /* DKP data structures
 
@@ -570,24 +632,26 @@ switch (code) {                                         /* decode IR<5:7> */
 
     case ioDOC:                                         /* DOC */
         if ((dev_busy & INT_DKP) == 0)                  /* if device is not busy */
-        dkp_ussc = AC ;                                 /* save unit, sect */
+        {
+            dkp_ussc = AC ;                             /* save unit, sect */
+        }
         if (((dtype == TYPE_6099) ||                    /* (BKR: don't forget 6097) */
              (dtype == TYPE_6097) ||                    /* for 6099 and 6103 */
              (dtype == TYPE_6103)) &&                   /* if data<0> set, */
             (AC & 010000) )
-        dkp_diagmode = 1;                                /* set diagnostic mode */
+        dkp_diagmode = 1;                               /* set diagnostic mode */
         break;
-        }                                               /* end switch code */
+    }                                                   /* end switch code */
 
 u = GET_UNIT(dkp_ussc);                                 /* update current unit */
-uptr = dkp_dev.units + u ;                                /* select unit */
+uptr = dkp_dev.units + u ;                              /* select unit */
 dtype = GET_DTYPE (uptr->flags);                        /* get drive type */
 
 if ( DKP_TRACE(0) )
     {
     if ( code & 1 )
         printf( "  [%06o]  ", (rval & 0xFFFF) ) ;
-    printf( "]  \n" ) ;
+    printf( "]  \r\n" ) ;
     }
 
 switch (pulse) {                                        /* decode IR<8:9> */
@@ -606,13 +670,14 @@ switch (pulse) {                                        /* decode IR<8:9> */
                 dkp_ussc = 010003;
             } 
         else {                                          /* normal mode ... */
-            if (dkp_go (pulse))                         /* do command    */
-                break ;                                 /* break if no error  */
+            if (dkp_go (pulse)) {                       /* do command    */
+                    break ;                             /* break if no error  */
             }
-        DEV_CLR_BUSY( INT_DKP ) ;                       /*  clear busy  */
-        DEV_SET_DONE( INT_DKP ) ;                       /*  set done    */
-        DEV_UPDATE_INTR ;                               /*  update ints */
-        dkp_sta = dkp_sta | STA_DONE;                   /*  set controller done  */
+            DEV_CLR_BUSY( INT_DKP ) ;                   /*  clear busy  */
+            DEV_SET_DONE( INT_DKP ) ;                   /*  set done    */
+            DEV_UPDATE_INTR ;                           /*  update ints */
+            dkp_sta = dkp_sta | STA_DONE;               /*  set controller done  */
+        }
         break;
 
     case iopC:                                          /* clear */
@@ -631,7 +696,7 @@ switch (pulse) {                                        /* decode IR<8:9> */
             }
         else
             {
-            DEV_CLR_DONE( INT_DKP ) ;                   /*  clear done  */
+            DEV_CLR_DONE( INT_DKP ) ;               /*  clear done  */
             DEV_UPDATE_INTR ;
 
             /*  DG "undocumented feature": 'P' pulse can not start a read/write operation!
@@ -641,15 +706,16 @@ switch (pulse) {                                        /* decode IR<8:9> */
              *  and type because DOx instruction may have updated the controller info after
              *  start of this procedure and before our 'P' handler.   BKR
              */
-            if (dkp_go(pulse))
-                break;                                  /* no error - do not set done and status  */
+            if (dkp_go(pulse)) {
+                break;                              /* no error - do not set done and status  */
             }
 
-        DEV_SET_DONE( INT_DKP ) ;                       /* set done */
-        DEV_UPDATE_INTR ;                               /* update ints */
-        dkp_sta = dkp_sta | (STA_SKDN0 >> u);           /* set controller seek done */
-        break;
-    }                                                   /* end case pulse */
+            DEV_SET_DONE( INT_DKP ) ;               /* set done */
+            DEV_UPDATE_INTR ;                       /* update ints */
+            dkp_sta = dkp_sta | (STA_SKDN0 >> u);   /* set controller seek done */
+            break;
+            }
+        }                                           /* end case pulse */
 
 return rval;
 }
@@ -888,8 +954,8 @@ do  {
          * surface gets incremented
          */
         newsurf = GET_SURF(dkp_ussc, dtype) + 1 ;
-        newsurf = newsurf & ((drv_tab[dtype].newf) ? USSC_M_NSURFACE : USSC_M_OSURFACE) ;
-        DKP_UPDATE_USSC( type, 0, newsurf, 0 )
+        newsurf = newsurf & (drv_tab[dtype].newf ? USSC_M_NSURFACE : USSC_M_OSURFACE) ;
+        DKP_UPDATE_USSC( dtype, 0, newsurf, 0 );
 
         if ( (GET_SURF(dkp_ussc, dtype)) >= drv_tab[dtype].surf )
             {
@@ -939,7 +1005,7 @@ do  {
 newsect = GET_SECT (dkp_ussc, dtype) + 1 ;              /*  update next sector  */
 newsurf = GET_SURF (dkp_ussc, dtype) ;                  /*  and next head  */
                                                         /*  (count set below)    */
-DKP_UPDATE_USSC( type, 1, newsurf, newsect )
+DKP_UPDATE_USSC( dtype, 1, newsurf, newsect );
 }  /*  end read/write loop  */
 
     while ( (GET_COUNT(dkp_ussc)) ) ;

@@ -174,6 +174,8 @@ patch   date            module(s) and fix(es)
 
                         vax_cpu.c
                         - added idle test for VMS 5.0/5.1 (Mark Pizzolato)
+*/
+
 
 /* V3.11 revision history
 

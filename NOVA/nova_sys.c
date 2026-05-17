@@ -63,6 +63,7 @@ extern DEVICE clk_dev;
 extern DEVICE lpt_dev;
 extern DEVICE dkp_dev;
 extern DEVICE dsk_dev;
+extern DEVICE dzp_dev;
 extern DEVICE mta_dev;
 extern DEVICE qty_dev;
 extern DEVICE alm_dev;
@@ -119,6 +120,7 @@ DEVICE *sim_devices[] = {
     &lpt_dev,
     &dsk_dev,
     &dkp_dev,
+    &dzp_dev,
     &mta_dev,
     &qty_dev,
     &alm_dev,
@@ -612,7 +614,7 @@ static const char *device[] = {
  "ERCC", "MAP",
 #endif
  "TTI", "TTO", "PTR", "PTP", "RTC", "PLT", "CDR", "LPT",
- "DSK", "MTA", "DCM", "QTY" /* "ADCV" */, "DKP", "CAS",
+ "DSK", "MTA", "DCM", "DZP", "QTY" /* "ADCV" */, "DKP", "CAS",
  "TTI1", "TTO1", "CPU",
  NULL
  };
@@ -622,7 +624,7 @@ static const int32 dev_val[] = {
  002, 003,
 #endif
  010, 011, 012, 013, 014, 015, 016, 017,
- 020, 022, 024, 030, 033, 034, 
+ 020, 022, 024, 027, 030, 033, 034, 
  050, 051, 077,
  -1
  };

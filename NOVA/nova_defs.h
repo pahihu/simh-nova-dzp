@@ -204,6 +204,7 @@
 #define DEV_DSK         020                             /* fixed head disk */
 #define DEV_MTA         022                             /* magtape */
 #define DEV_DCM         024                             /* data comm mux */
+#define DEV_DZP         027                             /* Zebra disk pack */
 #define DEV_ADCV        030                             /* A/D converter */
 #define DEV_QTY         030                             /* 4060 multiplexor */
 #define DEV_DKP         033                             /* disk pack */
@@ -247,6 +248,7 @@ typedef struct {
 
 #define INT_V_PIT       2                               /* PIT */
 #define INT_V_DKP       3                               /* moving head disk */
+#define INT_V_DZP       3
 #define INT_V_DSK       4                               /* fixed head disk */
 #define INT_V_MTA       5                               /* magnetic tape */
 #define INT_V_LPT       6                               /* line printer */
@@ -267,6 +269,7 @@ typedef struct {
 
 #define INT_PIT         (1 << INT_V_PIT)
 #define INT_DKP         (1 << INT_V_DKP)
+#define INT_DZP         (1 << INT_V_DZP)
 #define INT_DSK         (1 << INT_V_DSK)
 #define INT_MTA         (1 << INT_V_MTA)
 #define INT_LPT         (1 << INT_V_LPT)
@@ -290,6 +293,7 @@ typedef struct {
 /* PI disable bits */
 
 #define PI_PIT          0001000
+#define PI_DZP          0000400
 #define PI_DKP          0000400
 #define PI_DSK          0000100
 #define PI_MTA          0000040
