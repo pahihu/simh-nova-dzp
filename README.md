@@ -3,7 +3,7 @@ DZP in 3 days
 
 What bugged me, that [Wild Hare Computer Systems Inc.](https://novasareforever.org/emulators/emulator-downloads)
  produced an excellent Nova/Eclipse simulator, which is based on OpenSimH. 
-It contains an 6067-type RDOS disk with goodies loaded, but I cannot access it,
+It contains a 6067-type RDOS disk image loaded with goodies, but I cannot access it,
 because there is no DZP disk controller in SimH.
 Let's do it.
 
