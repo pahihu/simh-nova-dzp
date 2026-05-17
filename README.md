@@ -20,17 +20,17 @@ Milestones
 
 Documentation
 
-* 015-000021-07 Peripheral Programming Manual, 1977
-    6060 Series DG/Disc Storage Subsystem pp.249
+* 015-000021-07 Peripheral Programming Manual, 1977\
+    *6060 Series DG/Disc Storage Subsystem pp.249*
 
-* 014-000617-01 Nova 4 Programmer's Reference, 1978-80
-    Chapter IV. Input/Output pp.33
+* 014-000617-01 Nova 4 Programmer's Reference, 1978-80\
+    *Chapter IV. Input/Output pp.33*
     
-* 600-294-00-A Model ZDF-1 Disk and Tape Drive Controller Manual, 1984
-    6.0 Disk Program Control pp.81
+* 600-294-00-A Model ZDF-1 Disk and Tape Drive Controller Manual, 1984\
+    *6.0 Disk Program Control pp.81*
     
-* 014-000644-00 Model 6122 DG/Disc Storage Subsystem Programmers Reference, 1979
-    Controller registers pp.9-10 (how drive attention flags generate INTs)
+* 014-000644-00 Model 6122 DG/Disc Storage Subsystem Programmers Reference, 1979\
+    *Controller registers pp.9-10 (how drive attention flags generate INTs)*
     
 **NOTE**: Good luck!
     
