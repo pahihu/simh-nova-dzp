@@ -12,10 +12,11 @@ Milestones
 * device code 027
 * double DOC sector addressing
 * P does not set controller's BUSY/DONE
-* NRDOS stopped after a seek => needs INTs (INT generation after RECAL/SEEK)
+* NRDOS boot stopped after a seek => needs INTs (INT generation after RECAL/SEEK)
+* hang up, DISK FORMAT ERROR, DISK STATUS ERROR etc.
 * tracing Nova boot I/O in the Wild Hare simulator (where mine goes wild?)
 * only SEEK/RECAL should set the units cylinder (leftover from DKP)
-* seek ends on a surface boundary
+* read ends on a surface boundary
 * start R/W while SEEK/RECAL in progress
 
 Documentation
