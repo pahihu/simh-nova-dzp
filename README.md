@@ -5,7 +5,7 @@ What bugged me, that [Wild Hare Computer Systems Inc.](https://novasareforever.o
  produced an excellent Nova/Eclipse simulator, which is based on OpenSimH. 
 It contains a 6067-type RDOS disk image loaded with goodies, but I cannot access it,
 because there is no DZP disk controller in SimH.
-Let's do it.
+Let's do it. It is based on the DKP controller code.
 
 Milestones
 
@@ -15,7 +15,7 @@ Milestones
 * NRDOS boot stopped after a seek => needs INTs (INT generation after RECAL/SEEK)
 * hang up, DISK FORMAT ERROR, DISK STATUS ERROR etc.
 * tracing Nova boot I/O in the Wild Hare simulator (where mine goes wild?)
-* only SEEK/RECAL should set the units cylinder (leftover from DKP)
+* only SEEK/RECAL should set the cylinder count in the unit (leftover from DKP)
 * read ends on a surface boundary
 * start R/W while SEEK/RECAL in progress
 
