@@ -117,7 +117,7 @@ t_stat sim_activate (UNIT *uptr, int32 interval);
 t_stat sim_activate_abs (UNIT *uptr, int32 interval);
 const char *sim_error_text (t_stat stat);
 t_stat sim_cancel (UNIT *uptr);
-t_bool sim_is_active (UNIT *uptr);
+int32 sim_is_active (UNIT *uptr);
 int32 sim_activate_time (UNIT *uptr);
 double sim_gtime (void);
 uint32 sim_grtime (void);
