@@ -587,7 +587,7 @@ if ( DKP_TRACE(0) )
     {
     if ( code & 1 )
         printf( "  [%06o]  ", (rval & 0xFFFF) ) ;
-    printf( "]  \n" ) ;
+    printf( "]  \r\n" ) ;
     }
 
 switch (pulse) {                                        /* decode IR<8:9> */
