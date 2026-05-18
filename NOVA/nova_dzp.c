@@ -722,12 +722,12 @@ if ( DZP_TRACE(0) )
     {
     if ( code & 1 ) {
         if (rval & 0xFFFF) {
-            printf(trace_buf);
+            printf("%s", trace_buf);
             printf( "  [%06o]  ", (rval & 0xFFFF) ) ;
             printf( "]  \r\n" ) ;
             }
         } else {
-            printf(trace_buf);
+            printf("%s", trace_buf);
             printf( "]  \r\n" ) ;
             }
     }
@@ -767,8 +767,10 @@ switch (pulse) {                                        /* decode IR<8:9> */
         DEV_CLR_DONE( INT_DZP ) ;                       /*  set done    */
         DEV_UPDATE_INTR ;                               /*  update ints */
         dzp_sta = dzp_sta & ~(STA_DFLGS + STA_EFLGS);/*  clear controller flags  */
-        if (dzp_unit[u].FUNC == FCCY_READ || dzp_unit[u].FUNC == FCCY_WRITE)
-            sim_cancel (&dzp_unit[u]);                  /*  cancel any r/w op  */
+        if (dzp_unit[u].flags & UNIT_ATT) {             /* attached?    */
+            if (dzp_unit[u].FUNC == FCCY_READ || dzp_unit[u].FUNC == FCCY_WRITE)
+                sim_cancel (&dzp_unit[u]);              /*  cancel any r/w op  */
+            }
         break;
 
     case iopP:                                          /* pulse */
@@ -828,7 +830,7 @@ return rval;
 t_stat dzp_go ( int32 pulse )
 {
 UNIT *uptr;
-int32 oldCyl, u, dtype;
+int32 oldCyl, u, dtype, t;
 float fact;
 
 TRACEP("pulse=%d\r\n",pulse);
@@ -938,7 +940,8 @@ switch (uptr->FUNC) {                                   /* decode command */
         }
         if (uptr->flags & UNIT_BSY) {
             dzp_svc (uptr);                             /* service it */
-            sim_activate_abs (uptr, dzp_rwait);         /* replace on queue */
+            t = sim_is_active (uptr);
+            sim_activate_abs (uptr, t + dzp_rwait);     /* replace on queue */
             }
         else sim_activate (uptr, dzp_rwait);            /* schedule read or write request */
         break;
@@ -1303,6 +1306,11 @@ static const int32 boot_rom[] = {
 t_stat dzp_boot (int32 unitno, DEVICE *dptr)
 {
 size_t i;
+UNIT *uptr;
+
+uptr = dzp_dev.units + unitno;
+if (0 == (uptr->flags & UNIT_ATT))                      /* not attached? */
+    return SCPE_UNATT;
 
 for (i = 0; i < BOOT_LEN; i++)
     M[BOOT_START + i] = (uint16) boot_rom[i];

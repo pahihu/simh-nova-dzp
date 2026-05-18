@@ -247,25 +247,25 @@ typedef struct {
 */
 
 #define INT_V_PIT       2                               /* PIT */
-#define INT_V_DKP       3                               /* moving head disk */
-#define INT_V_DZP       3
-#define INT_V_DSK       4                               /* fixed head disk */
-#define INT_V_MTA       5                               /* magnetic tape */
-#define INT_V_LPT       6                               /* line printer */
-#define INT_V_CLK       7                               /* clock */
-#define INT_V_PTR       8                               /* paper tape reader */
-#define INT_V_PTP       9                               /* paper tape punch */
-#define INT_V_PLT       10                              /* plotter */
-#define INT_V_TTI       11                              /* keyboard */
-#define INT_V_TTO       12                              /* terminal */
-#define INT_V_TTI1      13                              /* second keyboard */
-#define INT_V_TTO1      14                              /* second terminal */
-#define INT_V_QTY       15                              /* QTY multiplexor */
-#define INT_V_ALM       16                              /* ALM multiplexor */
-#define INT_V_STK       17                              /* stack overflow */
-#define INT_V_NO_ION_PENDING 18                         /* ion delay */
-#define INT_V_ION       19                              /* interrupts on */
-#define INT_V_TRAP      20                              /* trap instruction */
+#define INT_V_DZP       3                               /* moving head disk Zebra */
+#define INT_V_DKP       4                               /* moving head disk */
+#define INT_V_DSK       5                               /* fixed head disk */
+#define INT_V_MTA       6                               /* magnetic tape */
+#define INT_V_LPT       7                               /* line printer */
+#define INT_V_CLK       8                               /* clock */
+#define INT_V_PTR       9                               /* paper tape reader */
+#define INT_V_PTP       10                              /* paper tape punch */
+#define INT_V_PLT       11                              /* plotter */
+#define INT_V_TTI       12                              /* keyboard */
+#define INT_V_TTO       13                              /* terminal */
+#define INT_V_TTI1      14                              /* second keyboard */
+#define INT_V_TTO1      15                              /* second terminal */
+#define INT_V_QTY       16                              /* QTY multiplexor */
+#define INT_V_ALM       17                              /* ALM multiplexor */
+#define INT_V_STK       18                              /* stack overflow */
+#define INT_V_NO_ION_PENDING 19                         /* ion delay */
+#define INT_V_ION       20                              /* interrupts on */
+#define INT_V_TRAP      21                              /* trap instruction */
 
 #define INT_PIT         (1 << INT_V_PIT)
 #define INT_DKP         (1 << INT_V_DKP)
