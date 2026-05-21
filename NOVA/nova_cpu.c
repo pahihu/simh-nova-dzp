@@ -333,6 +333,69 @@ char * devBitNames( int32 flags, char * ptr, char * sepStr ) ;
 
 void mask_out (int32 mask);
 
+int32 GetMap(int32 addr);
+int32 PutMap(int32 addr, int32 data);
+
+#define USR_MAP     0
+#define DCH_MAP     1
+
+#define MODE_SVR    0
+#define MODE_USR    1
+
+#define MAP_M_WP    0200
+#define MAP_M_PPAGE 0177
+
+int32 MapMode;          /* MODE_SVR MODE_USR */
+int32 Map[2][32];       /* WP + PPAGE */
+int32 MapDevProt[8];    /* device protection  */
+int32 MapProtCtrl;      /* protection control, see LDPC_M_xxx */
+int32 MapStatus;        /* Map Status         */
+int32 MapInstrAddr;     /* Instr. Address     */
+int32 MapInvAddr;       /* Invalid Address    */
+int32 MapModeINT;       /* last INT MapMode   */
+
+#define DOA_M_TYP    0140000
+
+#define DOA_LDM      0000000    /* LOAD MAP */
+#define LDM_M_DCH    0020000
+#define LDM_V_LPAG   8
+#define LDM_M_LPAG   0017400
+#define LDM_M_WP     0000200
+#define LDM_M_PPAG   0000177
+
+#define DOA_LDDP     0040000    /* LOAD DEVICE PROTECTION */
+#define LDDP_M_DCLS  0003400
+#define LDDP_M_DPR   0000377
+
+#define DOA_LDPC     0140000    /* LOAD PROTECTION CONTROL */
+#define LDPC_M_DEFER 0020000
+#define LDPC_M_WP    0010000
+#define LDPC_M_IOP   0004000
+#define LDPC_M_DCH   0002000
+
+#define DOA_IPC      0100000    /* INITIATE PAGE CHECK */
+#define IPC_M_DCH    0020000
+#define IPC_V_LPAGE  8
+#define IPC_M_LPAGE  037
+
+#define RS_M_USR     0100000    /* READ STATUS */
+#define RS_M_WR      0040000
+#define RS_M_IO      0020000
+#define RS_M_V       0010000
+#define RS_M_SIM     0004000
+#define RS_M_RSVD    0002000
+#define RS_M_DEFER   0001000
+#define RS_M_FP      0000400
+#define RS_M_WP      0000200
+#define RS_M_PPAGE   0000177
+
+
+int32 map_reset(void)
+{
+    MapMode = MODE_SVR;         /* supervisor mode */
+    MapProtCtrl &= ~LDPC_M_DCH; /* data channel map disabled */
+    Map[USR_MAP][31] = 31;      /* logical page 31 mapped to physical page 31 */
+}
 
 /* CPU data structures
 
@@ -440,13 +503,13 @@ while (reason == 0) {                                   /* loop until halted */
         if (int_req & INT_TRAP) {                       /* trap instruction? */
             int_req = int_req & ~INT_TRAP ;             /* clear */
             PCQ_ENTRY;                                  /* save old PC */
-            M[TRP_SAV] = (PC - 1) & AMASK;
+            PutMap(TRP_SAV, (PC - 1) & AMASK);
             MA = TRP_JMP;                               /* jmp @47 */
             }
         else {
             int_req = int_req & ~INT_ION;               /* intr off */
             PCQ_ENTRY;                                  /* save old PC */
-            M[INT_SAV] = PC;
+            PutMap(INT_SAV, PC);
             if (int_req & INT_STK) {                    /* stack overflow? */
                 int_req = int_req & ~INT_STK;           /* clear */
                 MA = STK_JMP;                           /* jmp @3 */
@@ -475,7 +538,7 @@ while (reason == 0) {                                   /* loop until halted */
         break;
         }
 
-    IR = M[PC];                                         /* fetch instr */
+    IR = GetMap(PC);                                    /* fetch instr */
     if ( hist_cnt )
         {
         hist_save( PC, IR ) ;                           /*  PC, int_req unchanged */
@@ -639,46 +702,46 @@ while (reason == 0) {                                   /* loop until halted */
             PC = MA;
             break;
         case 002:                                       /* ISZ */
-            src = (M[MA] + 1) & DMASK;
+            src = (GetMap(MA) + 1) & DMASK;
             if (MEM_ADDR_OK(MA))
-                M[MA] = src;
+                PutMap(MA, src);
             if (src == 0)
                 INCREMENT_PC ;
             break;
         case 003:                                       /* DSZ */
-            src = (M[MA] - 1) & DMASK;
+            src = (GetMap(MA) - 1) & DMASK;
             if (MEM_ADDR_OK(MA))
-                M[MA] = src;
+                PutMap(MA, src);
             if (src == 0)
                 INCREMENT_PC ;
             break;
         case 004:                                       /* LDA 0 */
-            AC[0] = M[MA];
+            AC[0] = GetMap(MA);
             break;
         case 005:                                       /* LDA 1 */
-            AC[1] = M[MA];
+            AC[1] = GetMap(MA);
             break;
         case 006:                                       /* LDA 2 */
-            AC[2] = M[MA];
+            AC[2] = GetMap(MA);
             break;
         case 007:                                       /* LDA 3 */
-            AC[3] = M[MA];
+            AC[3] = GetMap(MA);
             break;
         case 010:                                       /* STA 0 */
             if (MEM_ADDR_OK(MA))
-                M[MA] = AC[0];
+                PutMap(MA, AC[0]);
             break;
         case 011:                                       /* STA 1 */
             if (MEM_ADDR_OK(MA))
-                M[MA] = AC[1];
+                PutMap(MA, AC[1]);
             break;
         case 012:                                       /* STA 2 */
             if (MEM_ADDR_OK(MA))
-                M[MA] = AC[2];
+                PutMap(MA, AC[2]);
             break;
         case 013:                                       /* STA 3 */
             if (MEM_ADDR_OK(MA))
-                M[MA] = AC[3];
+                PutMap(MA, AC[3]);
             break;
             }                                           /* end switch */
         }                                               /* end mem ref */
@@ -738,25 +801,25 @@ while (reason == 0) {                                   /* loop until halted */
             case ioDIA:                                 /* load byte */
                 if (cpu_unit.flags & UNIT_BYT)
                     {
-                    AC[dstAC] = (M[AC[pulse] >> 1] >> ((AC[pulse] & 1)? 0: 8)) & 0377 ;
+                    AC[dstAC] = (GetMap(AC[pulse] >> 1) >> ((AC[pulse] & 1)? 0: 8)) & 0377 ;
                     }
                 else if (cpu_unit.flags & UNIT_STK)  /*  if Nova 3 this is really a SAV... 2007-Jun-01, BKR  */
                     {
                     SP = INCA (SP);
                     if (MEM_ADDR_OK (SP))
-                        M[SP] = AC[0];
+                        PutMap(SP, AC[0]);
                     SP = INCA (SP);
                     if (MEM_ADDR_OK (SP))
-                        M[SP] = AC[1];
+                        PutMap(SP, AC[1]);
                     SP = INCA (SP);
                     if (MEM_ADDR_OK (SP))
-                        M[SP] = AC[2];
+                        PutMap(SP, AC[2]);
                     SP = INCA (SP);
                     if (MEM_ADDR_OK (SP))
-                        M[SP] = FP;
+                        PutMap(SP, FP);
                     SP = INCA (SP);
                     if (MEM_ADDR_OK (SP))
-                        M[SP] = (C >> 1) | (AC[3] & AMASK);
+                        PutMap(SP, (C >> 1) | (AC[3] & AMASK));
                     AC[3] = FP = SP & AMASK;  
                     STK_CHECK (SP, 5);
                     }
@@ -780,21 +843,21 @@ while (reason == 0) {                                   /* loop until halted */
                     if (pulse == iopN) {                /* push (PSHA) */
                         SP = INCA (SP);
                         if (MEM_ADDR_OK (SP))
-                            M[SP] = AC[dstAC];
+                            PutMap(SP, AC[dstAC]);
                         STK_CHECK (SP, 1);
                         }
                     if ((pulse == iopS) &&              /* Nova 4 pshn (PSHN) */
                         (cpu_unit.flags & UNIT_BYT)) {
                         SP = INCA (SP);
                         if (MEM_ADDR_OK (SP))
-                            M[SP] = AC[dstAC];
-                        if ( (SP & 0xFFFF) > (M[042] & 0xFFFF) )
+                            PutMap(SP, AC[dstAC]);
+                        if ( (SP & 0xFFFF) > (GetMap(042) & 0xFFFF) )
                             {
                             int_req = int_req | INT_STK ;
                             }
                         }
                     if (pulse == iopC) {                /* pop (POPA) */
-                        AC[dstAC] = M[SP];
+                        AC[dstAC] = GetMap(SP);
                         SP = DECA (SP);
                         }
                     }
@@ -806,27 +869,27 @@ while (reason == 0) {                                   /* loop until halted */
                     int32 MA, val;
                    MA = AC[pulse] >> 1;
                     val = AC[dstAC] & 0377;
-                    if (MEM_ADDR_OK (MA)) M[MA] = (AC[pulse] & 1)?
-                      ((M[MA] & ~0377) | val)
-                    : ((M[MA] & 0377) | (val << 8));
+                    if (MEM_ADDR_OK (MA)) PutMap(MA, (AC[pulse] & 1)?
+                      ((GetMap(MA) & ~0377) | val)
+                    : ((GetMap(MA) &  0377) | (val << 8)));
                     }
                 else if (cpu_unit.flags & UNIT_STK)  /*  if Nova 3 this is really a SAV... 2007-Jun-01, BKR  */
                     {
                     SP = INCA (SP);
                     if (MEM_ADDR_OK (SP))
-                        M[SP] = AC[0];
+                        PutMap(SP, AC[0]);
                     SP = INCA (SP);
                     if (MEM_ADDR_OK (SP))
-                        M[SP] = AC[1];
+                        PutMap(SP, AC[1]);
                     SP = INCA (SP);
                     if (MEM_ADDR_OK (SP))
-                        M[SP] = AC[2];
+                        PutMap(SP, AC[2]);
                     SP = INCA (SP);
                     if (MEM_ADDR_OK (SP))
-                        M[SP] = FP;
+                        PutMap(SP, FP);
                     SP = INCA (SP);
                     if (MEM_ADDR_OK (SP))
-                        M[SP] = (C >> 1) | (AC[3] & AMASK);
+                        PutMap(SP, (C >> 1) | (AC[3] & AMASK));
                     AC[3] = FP = SP & AMASK;  
                     STK_CHECK (SP, 5);
                     }
@@ -837,60 +900,60 @@ while (reason == 0) {                                   /* loop until halted */
                     if (pulse == iopN) {                /* save */
                         SP = INCA (SP);
                         if (MEM_ADDR_OK (SP))
-                            M[SP] = AC[0];
+                            PutMap(SP, AC[0]);
                         SP = INCA (SP);
                         if (MEM_ADDR_OK (SP))
-                            M[SP] = AC[1];
+                            PutMap(SP, AC[1]);
                         SP = INCA (SP);
                         if (MEM_ADDR_OK (SP))
-                            M[SP] = AC[2];
+                            PutMap(SP, AC[2]);
                         SP = INCA (SP);
                         if (MEM_ADDR_OK (SP))
-                            M[SP] = FP;
+                            PutMap(SP, FP);
                         SP = INCA (SP);
                         if (MEM_ADDR_OK (SP))
-                            M[SP] = (C >> 1) | (AC[3] & AMASK);
+                            PutMap(SP, (C >> 1) | (AC[3] & AMASK));
                         AC[3] = FP = SP & AMASK;  
                         STK_CHECK (SP, 5);
                         }
                     else if (pulse == iopC) {                /* retn */
                         PCQ_ENTRY;
                         SP = FP & AMASK;
-                        C = (M[SP] << 1) & CBIT;
-                        PC = M[SP] & AMASK;
+                        C = (GetMap(SP) << 1) & CBIT;
+                        PC = GetMap(SP) & AMASK;
                         SP = DECA (SP);
-                        AC[3] = M[SP];
+                        AC[3] = GetMap(SP);
                         SP = DECA (SP);
-                        AC[2] = M[SP];
+                        AC[2] = GetMap(SP);
                         SP = DECA (SP);
-                        AC[1] = M[SP];
+                        AC[1] = GetMap(SP);
                         SP = DECA (SP);
-                        AC[0] = M[SP];
+                        AC[0] = GetMap(SP);
                         SP = DECA (SP);
                         FP = AC[3] & AMASK;
                         }
                     else if ((pulse == iopS) &&              /* Nova 4 SAVN */
                         (cpu_unit.flags & UNIT_BYT)) {
-                        int32 frameSz = M[PC] ;
+                        int32 frameSz = GetMap(PC) ;
                         PC = INCA (PC) ;
                         SP = INCA (SP);
                         if (MEM_ADDR_OK (SP))
-                            M[SP] = AC[0];
+                            PutMap(SP, AC[0]);
                         SP = INCA (SP);
                         if (MEM_ADDR_OK (SP))
-                            M[SP] = AC[1];
+                            PutMap(SP, AC[1]);
                         SP = INCA (SP);
                         if (MEM_ADDR_OK (SP))
-                            M[SP] = AC[2];
+                            PutMap(SP, AC[2]);
                         SP = INCA (SP);
                         if (MEM_ADDR_OK (SP))
-                            M[SP] = FP;
+                            PutMap(SP, FP);
                         SP = INCA (SP);
                         if (MEM_ADDR_OK (SP))
-                            M[SP] = (C >> 1) | (AC[3] & AMASK);
+                            PutMap(SP, (C >> 1) | (AC[3] & AMASK));
                         AC[3] = FP = SP & AMASK ;
                         SP = (SP + frameSz) & AMASK ;
-                        if (SP > M[042])
+                        if (SP > GetMap(042))
                             {
                             int_req = int_req | INT_STK;
                             }
@@ -964,7 +1027,7 @@ while (reason == 0) {                                   /* loop until halted */
                     {
                     SP = INCA (SP);
                     if (MEM_ADDR_OK (SP))
-                        M[SP] = AC[dstAC];
+                        PutMap(SP, AC[dstAC]);
                     STK_CHECK (SP, 1);
                     }
                 break;
@@ -1112,7 +1175,7 @@ t_stat cpu_ex (t_value *vptr, t_addr addr, UNIT *uptr, int32 sw)
 if (addr >= MEMSIZE)
     return SCPE_NXM;
 if (vptr != NULL)
-    *vptr = M[addr] & DMASK;
+    *vptr = GetMap(addr) & DMASK;
 return SCPE_OK;
 }
 
@@ -1122,7 +1185,7 @@ t_stat cpu_dep (t_value val, t_addr addr, UNIT *uptr, int32 sw)
 {
 if (addr >= MEMSIZE)
     return SCPE_NXM;
-M[addr] = val & DMASK;
+PutMap(addr, val & DMASK);
 return SCPE_OK;
 }
 
@@ -1136,12 +1199,12 @@ t_addr i;
 if ((val <= 0) || (val > MAXMEMSIZE) || ((val & 07777) != 0))
     return SCPE_ARG;
 for (i = val; i < MEMSIZE; i++)
-    mc = mc | M[i];
+    mc = mc | GetMap(i);
 if ((mc != 0) && (!get_yn ("Really truncate memory [N]?", FALSE)))
     return SCPE_OK;
 MEMSIZE = val;
 for (i = MEMSIZE; i < MAXMEMSIZE; i++)
-    M[i] = 0;
+    PutMap(i, 0);
 return SCPE_OK;
 }
 
@@ -1249,7 +1312,7 @@ t_stat cpu_boot (int32 unitno, DEVICE *dptr)
 {
 size_t i;
 
-for (i = 0; i < BOOT_LEN; i++) M[BOOT_START + i] = boot_rom[i];
+for (i = 0; i < BOOT_LEN; i++) PutMap(BOOT_START + i, boot_rom[i]);
 saved_PC = BOOT_START;
 return SCPE_OK;
 }
@@ -1519,3 +1582,44 @@ if ( ptr )
     }
 return ( ptr ) ;
 }   /*  end of 'devBitNames'  */
+
+
+#define MAP_V_PAGE      10
+#define MAP_M_PAGE      037
+#define MAP_M_OFFSET    01777
+
+int32 MapAddr(int32 map, int32 addr)
+{
+    int32 page, phypage;
+    int32 paddr;
+
+    page = (addr >> MAP_V_PAGE) & MAP_M_PAGE;
+    switch (MapMode) {
+    case MODE_SVR:
+        phypage = (31 == page) ?  Map[MAP_USR][31] : page;
+        break;
+    case MODE_USR:
+        phypage = Map[MAP_USR][page];
+        break;
+    }
+    paddr = (phypage << MAP_V_PAGE) | (addr & MAP_M_OFFSET);
+    return paddr;
+}
+
+int32 GetMap(int32 addr)
+{
+    int32 paddr;
+
+    paddr = MapAddr(addr);
+    return M[paddr];
+}
+
+int32 PutMap(int32 addr, int32 data)
+{
+    int32 paddr;
+
+    paddr = MapAddr(map);
+    M[paddr] = data;
+    return data;
+}
+
