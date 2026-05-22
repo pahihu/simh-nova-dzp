@@ -346,9 +346,6 @@ void decode_bits(char *msg, int32 x, char** bits)
 {
   int i;
   
-  if (dzp_trace < 128)
-    return;
-  
   printf(" %s=",msg);
   for (i = 0; i < 16; i++) {
     if (x & 1) printf("%s ",bits[i]);
@@ -359,16 +356,22 @@ void decode_bits(char *msg, int32 x, char** bits)
 
 void decode_sta(char *msg, int32 x)
 {
+  if (dzp_trace < 128)
+    return;
   decode_bits(msg,x,sta_bits);
 }
 
 void decode_zsta(char *msg, int32 x)
 {
+  if (dzp_trace < 128)
+    return;
   decode_bits(msg,x,zsta_bits);
 }
 
 void decode_zusta(char *msg, int32 x)
 {
+  if (dzp_trace < 128)
+    return;  
   decode_bits(msg,x,zusta_bits);
 }
 
@@ -678,11 +681,13 @@ switch (code) {                                         /* decode IR<5:7> */
 
     case ioDOB:                                         /* DOB */
         if ((dev_busy & INT_DZP) == 0) {
-            dzp_ma = AC & DMASK;                        /* old was AMASK? */
-            if (AC & 0100000)
+            dzp_ma = AC & AMASK;                        /* old was AMASK? */
+            if (AC & 0100000) {
                 dzp_map = 3;                            /* high bit is map */
+                }
             else
                 dzp_map = 0;
+            //printf("dzp_ma=%06o (%02o,%04o)\r\n",dzp_ma,(dzp_ma >> 10),dzp_ma & 01777);
         }
         break;
 

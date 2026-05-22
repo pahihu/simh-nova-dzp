@@ -400,6 +400,14 @@ int32 FetchCycle = 0;   /* FETCH cycle */
 #define LDPC_M_WP    0010000
 #define LDPC_M_IOP   0004000
 #define LDPC_M_DCH   0002000
+static char *ldpc_bits[] = {
+    "?","?","?",
+    "?","?","?",
+    "?","?","?",
+    "?","DCH","IOP",
+    "WP","DEFER","1",
+    "1"
+};
 
 #define DEFER_PROT   ((USR_MAP == MapUse) && (MapProtCtrl & LDPC_M_DEFER))
 #define WRITE_PROT   ((USR_MAP == MapUse) && (MapProtCtrl & LDPC_M_WP))
@@ -420,6 +428,35 @@ int32 FetchCycle = 0;   /* FETCH cycle */
 #define MAP_STA_WP    0000200
 #define MAP_STA_PPAGE 0000177
 
+static char *map_sta_bits[] = {
+    "","","",
+    "","","",
+    "","WP","FP",
+    "DEFER","?","SIM",
+    "V","IO","WR",
+    "USR"
+};
+
+
+int32 mmpu_trace = 0;
+#define MMPU_TRACE(x)   (mmpu_trace & (1 << (x)))
+
+extern void decode_bits(char *msg, int32 x, char** bits);
+
+void decode_ldpc(char *msg, int32 x)
+{
+    if (MMPU_TRACE(2)) {
+        decode_bits(msg, x, ldpc_bits);
+        }
+}
+
+void decode_map_sta(char *msg, int32 x)
+{
+    if (MMPU_TRACE(2)) {
+        printf(" PAGE=%03o", x & 0177);
+        decode_bits(msg, x, map_sta_bits);
+        }
+}
 
 t_stat mmpu_reset(DEVICE *dptr)
 {
@@ -427,8 +464,10 @@ t_stat mmpu_reset(DEVICE *dptr)
 
     MapMode = MODE_SVR;         /* supervisor mode */
     MapProtCtrl &= ~LDPC_M_DCH; /* data channel map disabled */
-    for (i = 0; i < 32; i++)
+    for (i = 0; i < 32; i++) {
         Map[SVR_MAP][i] = i;    /* logical page 31 mapped to physical page 31 */
+        Map[DCH_MAP][i] = i;
+        }
     Map[USR_MAP][31] = 31;
     MapUse = SVR_MAP;           /* use SVR map */
     return SCPE_OK;
@@ -439,12 +478,10 @@ t_stat mmpu_svc (UNIT *uptr)
     return SCPE_OK;
 }
 
-int32 mmpu_trace = 0;
-#define MMPU_TRACE(x)   (mmpu_trace & (1 << (x)))
-
 int32 mmpu(int32 pulse, int32 code, int32 AC)
 {
     int32 rval, page;
+    int32 devcls;
     char trace_buf[128];
 
     static char * f[8] =
@@ -460,6 +497,9 @@ int32 mmpu(int32 pulse, int32 code, int32 AC)
     switch (code) {
     case ioDIA: /* READ INSTR. ADDRESS */
         rval = MapInstrAddr & 077777;
+        if (MMPU_TRACE(1)) {
+            printf("RDINSTA %06o", rval);
+            }
         break;
     case ioDOA:
         switch ((AC >> DOA_V_TYP) & DOA_M_TYP) {
@@ -467,8 +507,11 @@ int32 mmpu(int32 pulse, int32 code, int32 AC)
             if ((AC & LDM_M_DCH) && (AC & LDM_M_WP))
                 AC &= ~LDM_M_WP;
             page = (AC >> LDM_V_LPAGE) & LDM_M_LPAGE;
+            if (MMPU_TRACE(1)) {
+                printf("LDM %06o (%s %02o:%03o)", AC, AC & LDM_M_DCH ? "DCH" : "USR", page, 0377 & AC);
+                }
             if (AC & LDM_M_DCH) {
-                Map[DCH_MAP][page] = 0377 & AC;
+                Map[DCH_MAP][page] = 0177 & AC;
             } else {
                 Map[USR_MAP][page] = 0377 & AC;
                 if (31 == page)
@@ -476,19 +519,33 @@ int32 mmpu(int32 pulse, int32 code, int32 AC)
             }
             break;
         case 1: /* LOAD DEVICE PROTECTION */
-            MapDevProt[(AC >> LDDP_V_DCLS) & LDDP_M_DCLS] = AC & LDDP_M_DP;
+            devcls = (AC >> LDDP_V_DCLS) & LDDP_M_DCLS;
+            if (MMPU_TRACE(1)) {
+                printf("LDDP %06o (page %02o %03o)", AC, devcls, AC & LDDP_M_DP);
+                }
+            MapDevProt[devcls] = AC & LDDP_M_DP;
             break;
         case 2: /* INITIATE PAGE CHECK */
+            if (MMPU_TRACE(1)) {
+                printf("IPC %06o", AC);
+                }
             MapPageCheck = AC;
             break;
         case 3: /* LOAD PROTECTION CONTROL */
             MapProtCtrl = AC;
+            if (MMPU_TRACE(1)) {
+                printf("LDPC %06o", AC);
+                decode_ldpc("LDPC", AC);
+                }
             ind_max = (LDPC_M_DEFER & MapProtCtrl) ? 16 : 65536;
             break;
         }
         break;
     case ioDIB: /* READ INVALID ADDRESS */
         rval = MapInvAddr;
+        if (MMPU_TRACE(1)) {
+            printf("RDINVA %06o", rval);
+            }
         break;
     case ioDOB:
         break;
@@ -499,11 +556,49 @@ int32 mmpu(int32 pulse, int32 code, int32 AC)
         if (MODE_USR == MapModeINT) rval |= MAP_STA_USR;
         page = (MapPageCheck >> IPC_V_LPAGE) & IPC_M_LPAGE;
         rval |= Map[(MapPageCheck & IPC_M_DCH) ? DCH_MAP : USR_MAP][page];
+        if (MMPU_TRACE(1)) {
+            printf("RDSTA %06o", rval);
+            decode_map_sta("STATUS",rval);
+            }
         break;
     case ioDOC:
         break;
     }
     
+    if (ioNIO == code) {
+        switch (pulse) {
+        case iopS: /* ENABLE USER MAP */
+            if (MMPU_TRACE(2)) {
+                printf("ENUM");
+                }
+            MapEnable = 1; /* 3 cycles */
+            MapFetchDelay = 3;
+            break;
+        case iopP: /* ENABLE SINGLE CYCLE */
+            if (MMPU_TRACE(2)) {
+                printf("ENSC");
+                }
+            MapSingleCycle = 1; /* 2 cycles */
+            MapFetchDelay = 2;
+            /* no protection features are enabled, uses USR_MAP, then after execute SVR_MAP */
+            /* - write prot. cannot be set for DCH map  */
+            /* - validity prot. cannot be disabled      */
+            /* - no protection => will not trap?        */
+            /* - what is the purpose of the STA_SIM?    */
+            /* - what happens if an error occurs during SingleCycle? */
+            /* - what happens if an error occurs during Page31 mapping in SVR_MODE ? */
+            MapStatus = 0;
+            break;
+        case iopC: /* SUPERVISOR CALL */
+            if (MMPU_TRACE(2)) {
+                printf("SVC");
+                }
+            INHIBIT_IO;
+            MapMode = MODE_SVR; MapUse = SVR_MAP;
+            PC = 042;
+        }
+        }
+
     if (MMPU_TRACE(0)) {
         if ( code & 1 ) {
             if (rval & 0xFFFF) {
@@ -518,30 +613,6 @@ int32 mmpu(int32 pulse, int32 code, int32 AC)
                 }
         }
 
-    if (ioNIO == code) {
-        switch (pulse) {
-        case iopS: /* ENABLE USER MAP */
-            MapEnable = 1; /* 3 cycles */
-            MapFetchDelay = 3;
-            break;
-        case iopP: /* ENABLE SINGLE CYCLE */
-            MapSingleCycle = 1; /* 2 cycles */
-            MapFetchDelay = 2;
-            /* no protection features are enabled, uses USR_MAP, then after execute SVR_MAP */
-            /* - write prot. cannot be set for DCH map  */
-            /* - validity prot. cannot be disabled      */
-            /* - no protection => will not trap?        */
-            /* - what is the purpose of the STA_SIM?    */
-            /* - what happens if an error occurs during SingleCycle? */
-            /* - what happens if an error occurs during Page31 mapping in SVR_MODE ? */
-            MapStatus = 0;
-            break;
-        case iopC: /* SUPERVISOR CALL */
-            INHIBIT_IO;
-            MapMode = MODE_SVR; MapUse = SVR_MAP;
-            PC = 042;
-        }
-        }
     return rval;
 }
 
@@ -667,6 +738,7 @@ REG mmpu_reg[] = {
     { ORDATA (ACTIVE, MapUse, 16) },
     { ORDATA (CYCLE, MapSingleCycle, 16) },
     { ORDATA (CHECK, MapPageCheck, 16) },
+    { DRDATA (TRACE, mmpu_trace,   32) },
     { NULL }
 };
 
@@ -1831,27 +1903,6 @@ return ( ptr ) ;
 #define MAP_M_PAGE      037
 #define MAP_M_OFFSET    01777
 
-/* 1-to-1 map for I/O devices */
-
-int32 MapAddr (int32 map, int32 addr)
-{
-    int32 page, phypage, paddr;
-    
-    if (map && DCH_ENABLED) {
-        map = DCH_MAP;
-        page = (addr >> MAP_V_PAGE) & MAP_M_PAGE;
-        phypage = Map[map][page];
-        /* DCH map is NOT write-protected by definition */
-        paddr = (phypage << MAP_V_PAGE) | (addr & MAP_M_OFFSET);
-        }
-    else {
-        paddr = addr;
-        }
-
-    return paddr;
-}
-
-
 int32 MapLastPage;
 
 int32 MapAddrEx(int32 map, int32 addr)
@@ -1880,7 +1931,22 @@ int32 MapAddrEx(int32 map, int32 addr)
     return paddr;
 }
 
-#define MAP_STA_SIM   0004000
+/* 1-to-1 map for I/O devices, almost */
+
+int32 MapAddr (int32 map, int32 addr)
+{
+    int32 paddr;
+    static int cnt=0;
+    
+    /*if (MMPU_TRACE(2)) {
+        if (DCH_ENABLED)
+        printf("MapAddr: map=%d DCH_ENABLED=%d\r\n",map,DCH_ENABLED?1:0);
+        }*/
+
+    map = /*map &&*/ DCH_ENABLED ? DCH_MAP : SVR_MAP;
+    paddr = MapAddrEx(map, addr);
+    return paddr;
+}
 
 int32 GetMap(int32 addr)
 {
