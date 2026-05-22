@@ -80,6 +80,10 @@ extern DEVICE pit_dev;
 extern int32 Usermap;
 extern int32 MapStat;
 
+#else
+
+extern DEVICE mmpu_dev;
+
 #endif
 
 /* SCP data structures
@@ -108,6 +112,8 @@ DEVICE *sim_devices[] = {
     &map_dev,
     &fpu_dev,
     &pit_dev,
+#else
+    &mmpu_dev,
 #endif
     &ptr_dev,
     &ptp_dev,
@@ -612,6 +618,8 @@ static const char *skip[] = {
 static const char *device[] = {
 #if defined (ECLIPSE)
  "ERCC", "MAP",
+#else
+ "MMPU",
 #endif
  "TTI", "TTO", "PTR", "PTP", "RTC", "PLT", "CDR", "LPT",
  "DSK", "MTA", "DCM", "DZP", "QTY" /* "ADCV" */, "DKP", "CAS",
@@ -622,6 +630,8 @@ static const char *device[] = {
 static const int32 dev_val[] = {
 #if defined (ECLIPSE)
  002, 003,
+#else
+ 002,
 #endif
  010, 011, 012, 013, 014, 015, 016, 017,
  020, 022, 024, 027, 030, 033, 034, 

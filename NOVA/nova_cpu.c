@@ -245,14 +245,14 @@
 #define SEXT(x)         (((x) & SIGN)? ((x) | ~DMASK): (x))
 #define STK_CHECK(x,y)  if (((x) & 0377) < (y)) \
                             int_req = int_req | INT_STK
-#define IND_STEP(x)     M[x] & A_IND;  /* return next level indicator */ \
+#define IND_STEP(x)     GetMap(x) & A_IND;  /* return next level indicator */ \
                         if ( ((x) <= AUTO_TOP) && ((x) >= AUTO_INC) ) {  \
                             if ( (x) < AUTO_DEC )                        \
-                                M[x] = (M[x] + 1) & DMASK;               \
+                                PutMap(x, (GetMap(x) + 1) & DMASK);      \
                             else                                         \
-                                M[x] = (M[x] - 1) & DMASK;               \
+                                PutMap(x, (GetMap(x) - 1) & DMASK);      \
                             }                                            \
-                        x = M[x] & AMASK
+                        x = GetMap(x) & AMASK
 
 #define INCREMENT_PC    PC = (PC + 1) & AMASK           /* increment PC */
 
@@ -260,16 +260,22 @@
 #define UNIT_V_STK      (UNIT_V_UF + 1)                 /* stack instr */
 #define UNIT_V_BYT      (UNIT_V_UF + 2)                 /* byte instr */
 #define UNIT_V_64KW     (UNIT_V_UF + 3)                 /* 64KW mem support */
-#define UNIT_V_MSIZE    (UNIT_V_UF + 4)                 /* dummy mask */
+#define UNIT_V_MMPU     (UNIT_V_UF + 4)                 /* Nova 840 MMPU */
+#define UNIT_V_MSIZE    (UNIT_V_UF + 5)                 /* dummy mask */
 #define UNIT_MDV        (1 << UNIT_V_MDV)
 #define UNIT_STK        (1 << UNIT_V_STK)
 #define UNIT_BYT        (1 << UNIT_V_BYT)
 #define UNIT_64KW       (1 << UNIT_V_64KW)
+#define UNIT_MMPU       (1 << UNIT_V_MMPU)
 #define UNIT_MSIZE      (1 << UNIT_V_MSIZE)
-#define UNIT_IOPT       (UNIT_MDV | UNIT_STK | UNIT_BYT | UNIT_64KW)
+#define UNIT_IOPT       (UNIT_MDV | UNIT_STK | UNIT_BYT | UNIT_64KW | UNIT_MMPU)
+#define UNIT_NOVA840    (UNIT_MDV | UNIT_MMPU)
 #define UNIT_NOVA3      (UNIT_MDV | UNIT_STK)
 #define UNIT_NOVA4      (UNIT_MDV | UNIT_STK | UNIT_BYT)
 #define UNIT_KERONIX    (UNIT_MDV | UNIT_64KW)
+
+#define UNIT_V_17B      (UNIT_V_UF + 0)                 /* 17B MAP */
+#define UNIT_17B        (1 << UNIT_V_17B)
 
 #define MODE_64K        (cpu_unit.flags & UNIT_64KW)
 #define MODE_64K_ACTIVE ((cpu_unit.flags & UNIT_64KW) && (0xFFFF == AMASK))
@@ -296,6 +302,7 @@ typedef struct
 uint16 M[MAXMEMSIZE] = { 0 };                           /* memory */
 int32 AC[4] = { 0 };                                    /* accumulators */
 int32 C = 0;                                            /* carry flag */
+int32 PC = 0;
 int32 saved_PC = 0;                                     /* program counter */
 int32 SP = 0;                                           /* stack pointer */
 int32 FP = 0;                                           /* frame pointer */
@@ -304,6 +311,7 @@ int32 dev_done = 0;                                     /* device done flags */
 int32 dev_busy = 0;                                     /* device busy flags */
 int32 dev_disable = 0;                                  /* int disable flags */
 int32 int_req = 0;                                      /* interrupt requests */
+int32 int_no_ion_pending = INT_NO_ION_PENDING;
 int32 pimask = 0;                                       /* priority int mask */
 int32 pwr_low = 0;                                      /* power fail flag */
 int32 ind_max = 65536;                                  /* iadr nest limit */
@@ -336,8 +344,9 @@ void mask_out (int32 mask);
 int32 GetMap(int32 addr);
 int32 PutMap(int32 addr, int32 data);
 
-#define USR_MAP     0
-#define DCH_MAP     1
+#define SVR_MAP     0
+#define USR_MAP     1
+#define DCH_MAP     2
 
 #define MODE_SVR    0
 #define MODE_USR    1
@@ -346,26 +355,45 @@ int32 PutMap(int32 addr, int32 data);
 #define MAP_M_PPAGE 0177
 
 int32 MapMode;          /* MODE_SVR MODE_USR */
-int32 Map[2][32];       /* WP + PPAGE */
+int32 MapUse;           /* which map to use */
+int32 Map[3][32];       /* WP + PPAGE */
 int32 MapDevProt[8];    /* device protection  */
 int32 MapProtCtrl;      /* protection control, see LDPC_M_xxx */
 int32 MapStatus;        /* Map Status         */
+int32 MapPageCheck;     /* Initiate Page Check */
 int32 MapInstrAddr;     /* Instr. Address     */
 int32 MapInvAddr;       /* Invalid Address    */
 int32 MapModeINT;       /* last INT MapMode   */
 
-#define DOA_M_TYP    0140000
+int32 MapEnable = 0;    /* Enable User Map in progress */
+int32 MapSingleCycle = 0;/* Single Cycle in progress */
+int32 MapFetchDelay = 0;/* delay MMPU operation (Enable User Map/Enable Single Cycle) */
+int32 FetchCycle = 0;   /* FETCH cycle */
+/* INT off and clear INT_NO_ION_PENDING mask, this will prevent ION_DELAY */
+#define INHIBIT_IO      { int_req &= ~INT_ION; int_no_ion_pending = 0; }
+
+#define LO(x)        ((x) & 07)
+#define HI(x)        LO((x) >> 3)
+
+#define DOA_M_TYP    03
+#define DOA_V_TYP    14
 
 #define DOA_LDM      0000000    /* LOAD MAP */
 #define LDM_M_DCH    0020000
-#define LDM_V_LPAG   8
-#define LDM_M_LPAG   0017400
+#define LDM_V_LPAGE  8
+#define LDM_M_LPAGE  037
 #define LDM_M_WP     0000200
-#define LDM_M_PPAG   0000177
+#define LDM_M_PPAGE  0000177
 
 #define DOA_LDDP     0040000    /* LOAD DEVICE PROTECTION */
-#define LDDP_M_DCLS  0003400
-#define LDDP_M_DPR   0000377
+#define LDDP_V_DCLS  8
+#define LDDP_M_DCLS  037
+#define LDDP_M_DP    0000377
+
+#define DOA_IPC      0100000    /* INITIATE PAGE CHECK */
+#define IPC_M_DCH    0020000
+#define IPC_V_LPAGE  8
+#define IPC_M_LPAGE  037
 
 #define DOA_LDPC     0140000    /* LOAD PROTECTION CONTROL */
 #define LDPC_M_DEFER 0020000
@@ -373,29 +401,181 @@ int32 MapModeINT;       /* last INT MapMode   */
 #define LDPC_M_IOP   0004000
 #define LDPC_M_DCH   0002000
 
-#define DOA_IPC      0100000    /* INITIATE PAGE CHECK */
-#define IPC_M_DCH    0020000
-#define IPC_V_LPAGE  8
-#define IPC_M_LPAGE  037
+#define DEFER_PROT   ((USR_MAP == MapUse) && (MapProtCtrl & LDPC_M_DEFER))
+#define WRITE_PROT   ((USR_MAP == MapUse) && (MapProtCtrl & LDPC_M_WP))
+#define IO_PROT      ((USR_MAP == MapUse) && (MapProtCtrl & LDPC_M_IOP))
+#define DCH_ENABLED  (MapProtCtrl & LDPC_M_DCH)
+#define VALID_PROT   ((USR_MAP == MapUse) && (MapStatus & MAP_STA_V))
+#define IO_V_JMP     040
+#define DEFER_WR_JMP 041
 
-#define RS_M_USR     0100000    /* READ STATUS */
-#define RS_M_WR      0040000
-#define RS_M_IO      0020000
-#define RS_M_V       0010000
-#define RS_M_SIM     0004000
-#define RS_M_RSVD    0002000
-#define RS_M_DEFER   0001000
-#define RS_M_FP      0000400
-#define RS_M_WP      0000200
-#define RS_M_PPAGE   0000177
+#define MAP_STA_USR   0100000    /* READ STATUS */
+#define MAP_STA_WR    0040000
+#define MAP_STA_IO    0020000
+#define MAP_STA_V     0010000
+#define MAP_STA_SIM   0004000
+#define MAP_STA_RSVD  0002000
+#define MAP_STA_DEFER 0001000
+#define MAP_STA_FP    0000400
+#define MAP_STA_WP    0000200
+#define MAP_STA_PPAGE 0000177
 
 
-int32 map_reset(void)
+t_stat mmpu_reset(DEVICE *dptr)
 {
+    int i;
+
     MapMode = MODE_SVR;         /* supervisor mode */
     MapProtCtrl &= ~LDPC_M_DCH; /* data channel map disabled */
-    Map[USR_MAP][31] = 31;      /* logical page 31 mapped to physical page 31 */
+    for (i = 0; i < 32; i++)
+        Map[SVR_MAP][i] = i;    /* logical page 31 mapped to physical page 31 */
+    Map[USR_MAP][31] = 31;
+    MapUse = SVR_MAP;           /* use SVR map */
+    return SCPE_OK;
 }
+
+t_stat mmpu_svc (UNIT *uptr)
+{
+    return SCPE_OK;
+}
+
+int32 mmpu_trace = 0;
+#define MMPU_TRACE(x)   (mmpu_trace & (1 << (x)))
+
+int32 mmpu(int32 pulse, int32 code, int32 AC)
+{
+    int32 rval, page;
+    char trace_buf[128];
+
+    static char * f[8] =
+        { "NIO", "DIA", "DOA", "DIB", "DOB", "DIC", "DOC", "SKP" } ;
+    static char * s[4] =
+        { " ", "S", "C", "P" } ;
+
+    if (MMPU_TRACE(0)) {
+        sprintf( trace_buf, "  [MMPU  %s%s %06o ", f[code & 0x07], s[pulse & 0x03], (AC & 0xFFFF) ) ;
+        }
+
+    rval = 0;
+    switch (code) {
+    case ioDIA: /* READ INSTR. ADDRESS */
+        rval = MapInstrAddr & 077777;
+        break;
+    case ioDOA:
+        switch ((AC >> DOA_V_TYP) & DOA_M_TYP) {
+        case 0: /* LOAD MAP */
+            if ((AC & LDM_M_DCH) && (AC & LDM_M_WP))
+                AC &= ~LDM_M_WP;
+            page = (AC >> LDM_V_LPAGE) & LDM_M_LPAGE;
+            if (AC & LDM_M_DCH) {
+                Map[DCH_MAP][page] = 0377 & AC;
+            } else {
+                Map[USR_MAP][page] = 0377 & AC;
+                if (31 == page)
+                    Map[SVR_MAP][31] = Map[USR_MAP][31];
+            }
+            break;
+        case 1: /* LOAD DEVICE PROTECTION */
+            MapDevProt[(AC >> LDDP_V_DCLS) & LDDP_M_DCLS] = AC & LDDP_M_DP;
+            break;
+        case 2: /* INITIATE PAGE CHECK */
+            MapPageCheck = AC;
+            break;
+        case 3: /* LOAD PROTECTION CONTROL */
+            MapProtCtrl = AC;
+            ind_max = (LDPC_M_DEFER & MapProtCtrl) ? 16 : 65536;
+            break;
+        }
+        break;
+    case ioDIB: /* READ INVALID ADDRESS */
+        rval = MapInvAddr;
+        break;
+    case ioDOB:
+        break;
+    case ioDIC: /* READ STATUS */
+#define MAP_STA_WP    0000200
+#define MAP_STA_PPAGE 0000177
+        rval = MapStatus & ~0377;
+        if (MODE_USR == MapModeINT) rval |= MAP_STA_USR;
+        page = (MapPageCheck >> IPC_V_LPAGE) & IPC_M_LPAGE;
+        rval |= Map[(MapPageCheck & IPC_M_DCH) ? DCH_MAP : USR_MAP][page];
+        break;
+    case ioDOC:
+        break;
+    }
+    
+    if (MMPU_TRACE(0)) {
+        if ( code & 1 ) {
+            if (rval & 0xFFFF) {
+                printf("%s", trace_buf);
+                printf( "  [%06o]  ", (rval & 0xFFFF) ) ;
+                printf( "]  \r\n" ) ;
+                }
+            }
+            else {
+                printf("%s", trace_buf);
+                printf( "]  \r\n" ) ;
+                }
+        }
+
+    if (ioNIO == code) {
+        switch (pulse) {
+        case iopS: /* ENABLE USER MAP */
+            MapEnable = 1; /* 3 cycles */
+            MapFetchDelay = 3;
+            break;
+        case iopP: /* ENABLE SINGLE CYCLE */
+            MapSingleCycle = 1; /* 2 cycles */
+            MapFetchDelay = 2;
+            /* no protection features are enabled, uses USR_MAP, then after execute SVR_MAP */
+            /* - write prot. cannot be set for DCH map  */
+            /* - validity prot. cannot be disabled      */
+            /* - no protection => will not trap?        */
+            /* - what is the purpose of the STA_SIM?    */
+            /* - what happens if an error occurs during SingleCycle? */
+            /* - what happens if an error occurs during Page31 mapping in SVR_MODE ? */
+            MapStatus = 0;
+            break;
+        case iopC: /* SUPERVISOR CALL */
+            INHIBIT_IO;
+            MapMode = MODE_SVR; MapUse = SVR_MAP;
+            PC = 042;
+        }
+        }
+    return rval;
+}
+
+/* 0 - SVR, 1 - USR, 2 - DCH map, 3 - DevProt */
+t_stat mmpu_ex (t_value *vptr, t_addr addr, UNIT *uptr, int32 sw)
+{
+if ((addr & 077) <= 07 && 3 == (addr >> 6)) {
+    if (vptr != NULL) *vptr = MapDevProt[addr & 077] & 0377;
+    return SCPE_OK;
+    }
+else if ((addr & 077) <= 037 && addr <= 0237) {
+    if (vptr != NULL) *vptr = Map[(addr >> 6) & 3][addr & 077] & 0377;
+    return SCPE_OK;
+    }
+/* uptr->u4 = -2;  signal to print_sys in eclipse_sys.c: do not map */
+return SCPE_NXM;
+}
+
+/* Memory deposit */
+
+t_stat mmpu_dep (t_value val, t_addr addr, UNIT *uptr, int32 sw)
+{
+if ((addr & 077) <= 07 && 3 == (addr >> 6)) {
+    MapDevProt[addr & 037] = (int32)val & 0377;
+    return SCPE_OK;
+    }
+/* uptr->u4 = -2; signal to print_sys in eclipse_sys.c: do not map */
+else if ((addr & 077) <= 037 && addr <= 0237) {
+    Map[(addr >> 6) & 3][addr & 037] = (int32)val & 0377;
+    return SCPE_OK;
+    }
+return SCPE_NXM;
+}
+
 
 /* CPU data structures
 
@@ -439,10 +619,12 @@ REG cpu_reg[] = {
     };
 
 MTAB cpu_mod[] = {
+    { UNIT_IOPT, UNIT_NOVA840, "NOVA840", "NOVA840", NULL },
     { UNIT_IOPT, UNIT_NOVA3, "NOVA3", "NOVA3", NULL },
     { UNIT_IOPT, UNIT_NOVA4, "NOVA4", "NOVA4", NULL },
     { UNIT_IOPT, UNIT_KERONIX, "KERONIX", "KERONIX", NULL },
     { UNIT_IOPT, UNIT_MDV,   "MDV",   "MDV",   NULL },
+    { UNIT_IOPT, UNIT_MMPU,  "MMPU",  "MMPU",   NULL },
     { UNIT_IOPT, UNIT_64KW,  "EXT64KW", "EXT64KW",  NULL },
     { UNIT_IOPT,        0,   "none",  "NONE",  NULL },
     { UNIT_MSIZE, ( 4 * 1024), NULL,  "4K", &cpu_set_size },
@@ -461,6 +643,7 @@ MTAB cpu_mod[] = {
     { UNIT_MSIZE, (56 * 1024), NULL, "56K", &cpu_set_size },
     { UNIT_MSIZE, (60 * 1024), NULL, "60K", &cpu_set_size },
     { UNIT_MSIZE, (64 * 1024), NULL, "64K", &cpu_set_size },
+    { UNIT_MSIZE, (128 * 1024), NULL, "128K", &cpu_set_size },
     { MTAB_XTD|MTAB_VDV|MTAB_NMO|MTAB_SHP, 0, "HISTORY", "HISTORY",
       &hist_set, &hist_show },
 
@@ -473,10 +656,41 @@ DEVICE cpu_dev = {
     &cpu_ex, &cpu_dep, &cpu_reset,
     NULL, NULL, NULL
     };
+    
+DIB mmpu_dib = { DEV_MMPU, 0, 0, &mmpu };
+    
+UNIT mmpu_unit = { UDATA (NULL, UNIT_17B, MAXMEMSIZE) };
+
+REG mmpu_reg[] = {
+    { ORDATA (STATUS, MapStatus, 16) },
+    { ORDATA (ENABLE, MapUse, 16) },
+    { ORDATA (ACTIVE, MapUse, 16) },
+    { ORDATA (CYCLE, MapSingleCycle, 16) },
+    { ORDATA (CHECK, MapPageCheck, 16) },
+    { NULL }
+};
+
+MTAB mmpu_mod[] = {
+    { UNIT_17B, UNIT_17B, "17bit", "17B", NULL },
+    { 0 }
+};
+
+DEVICE mmpu_dev = {
+    "MMPU", &mmpu_unit, mmpu_reg, mmpu_mod,
+    1, 8, 17, 1, 8, 16,
+    &mmpu_ex, &mmpu_dep, &mmpu_reset,
+    NULL, NULL, NULL,
+    &mmpu_dib, DEV_DISABLE
+};
+
+
+#include <setjmp.h>
+static jmp_buf MapTrap;
+#define TRAP(pc)    { if (MapSingleCycle) MapStatus |= MAP_STA_SIM; if (USR_MAP == MapUse) longjmp(MapTrap, pc); }
 
 t_stat sim_instr (void)
 {
-int32 PC, IR, i;
+int32 IR, i;
 t_stat reason;
 
 /* Restore register state */
@@ -490,6 +704,13 @@ reason = 0;
 
 /* Main instruction fetch/decode loop */
 
+if ((i = setjmp(MapTrap))) {                            /* MMPU trap */
+    INHIBIT_IO;
+    MapMode = MODE_SVR; MapUse = SVR_MAP;
+    PC = i;
+    reason = 0;
+}
+
 while (reason == 0) {                                   /* loop until halted */
 
     if (sim_interval <= 0) {                            /* check clock queue */
@@ -497,6 +718,17 @@ while (reason == 0) {                                   /* loop until halted */
             break;
         }
 
+    if (VALID_PROT) {                                   /* validity protection */
+        INHIBIT_IO;                                 /* during defer/execute cycle */
+        MapMode = MODE_SVR; MapUse = SVR_MAP;
+        PC = IO_V_JMP;
+        }
+
+    if (!MapFetchDelay && MapSingleCycle) {             /* end of Single Cycle */
+        MapUse = SVR_MAP;
+        MapSingleCycle = 0;
+        }
+        
     if (int_req > INT_PENDING) {                        /* interrupt or exception? */
         int32 MA, indf;
 
@@ -509,28 +741,30 @@ while (reason == 0) {                                   /* loop until halted */
         else {
             int_req = int_req & ~INT_ION;               /* intr off */
             PCQ_ENTRY;                                  /* save old PC */
-            PutMap(INT_SAV, PC);
+            PutMap(INT_SAV, PC);                        /* save in logical 0 */
+            MapModeINT = MapMode;
+            MapMode = MODE_SVR; MapUse = SVR_MAP;
             if (int_req & INT_STK) {                    /* stack overflow? */
                 int_req = int_req & ~INT_STK;           /* clear */
                 MA = STK_JMP;                           /* jmp @3 */
+                }
+            else
+                MA = INT_JMP;                           /* intr: jmp @1 */
         }
+        if ( MODE_64K_ACTIVE ) {
+            indf = IND_STEP (MA);
+            }
         else
-        MA = INT_JMP;                                   /* intr: jmp @1 */
-        }
-    if ( MODE_64K_ACTIVE ) {
-        indf = IND_STEP (MA);
-        }
-    else
-        {
-        for (i = 0, indf = 1; indf && (i < ind_max); i++) {
-            indf = IND_STEP (MA);                       /* indirect loop */
+            {
+            for (i = 0, indf = 1; indf && (i < ind_max); i++) {
+                indf = IND_STEP (MA);                       /* indirect loop */
+                }
+            if (i >= ind_max) {
+                reason = STOP_IND_INT;
+                break;
+                }
             }
-        if (i >= ind_max) {
-            reason = STOP_IND_INT;
-            break;
-            }
-        }
-    PC = MA;
+        PC = MA;
     }                                                   /* end interrupt */
 
     if (sim_brk_summ && sim_brk_test (PC, SWMASK ('E'))) { /* breakpoint? */
@@ -538,7 +772,9 @@ while (reason == 0) {                                   /* loop until halted */
         break;
         }
 
-    IR = GetMap(PC);                                    /* fetch instr */
+    MapInstrAddr = PC;                                  /* save instr. address */
+    FetchCycle = 1; IR = GetMap(PC); FetchCycle = 0;    /* fetch instr */
+    
     if ( hist_cnt )
         {
         hist_save( PC, IR ) ;                           /*  PC, int_req unchanged */
@@ -688,7 +924,13 @@ while (reason == 0) {                                   /* loop until halted */
                     indf = IND_STEP (MA);               /* resolve indirect */
                 }
                 if (i >= ind_max) {                     /* too many? */
-                    reason = STOP_IND;
+                    if (DEFER_PROT) {
+                        MapStatus |= MAP_STA_DEFER;
+                        MapInvAddr = indf;
+                        TRAP(DEFER_WR_JMP);
+                        }
+                    else
+                        reason = STOP_IND;
                     break;
                 }
             }
@@ -755,6 +997,13 @@ while (reason == 0) {                                   /* loop until halted */
         code = I_GETIOT (IR);
         pulse = I_GETPULSE (IR);
         device = I_GETDEV (IR);
+        if (IO_PROT) {
+            if (MapDevProt[HI(code)] & (1 << (7 - LO(code)))) {
+                MapStatus |= MAP_STA_IO;
+                MapInvAddr = MapInstrAddr;
+                TRAP(IO_V_JMP);
+            }
+        }
         if (code == ioSKP) {                            /* IO skip? */
             switch (pulse) {                            /* decode IR<8:9> */
 
@@ -1083,11 +1332,12 @@ while (reason == 0) {                                   /* loop until halted */
             switch (pulse) {                            /* decode IR<8:9> */
 
             case iopS:                                  /* ion */
-                int_req = (int_req | INT_ION) & ~INT_NO_ION_PENDING;
+                int_req = (int_req | INT_ION) & ~int_no_ion_pending;
                 break;
 
             case iopC:                                  /* iof */
                 int_req = int_req & ~INT_ION;
+                int_no_ion_pending = INT_NO_ION_PENDING;
                 break;
                 }                                       /* end switch pulse */
             }                                           /* end CPU control */
@@ -1126,7 +1376,7 @@ while (reason == 0) {                                   /* loop until halted */
             }    /*  end of 'switch'  */
         }    /*  end of handling non-existant device  */
       else reason = stop_dev;
-      }                                                 /* end if IOT */
+      }                                                 /* end if IOT */    
     }                                                   /* end while */
 
 /* Simulation halted */
@@ -1315,13 +1565,6 @@ size_t i;
 for (i = 0; i < BOOT_LEN; i++) PutMap(BOOT_START + i, boot_rom[i]);
 saved_PC = BOOT_START;
 return SCPE_OK;
-}
-
-/* 1-to-1 map for I/O devices */
-
-int32 MapAddr (int32 map, int32 addr)
-{
-return addr;
 }
 
 /* History subsystem
@@ -1588,29 +1831,68 @@ return ( ptr ) ;
 #define MAP_M_PAGE      037
 #define MAP_M_OFFSET    01777
 
-int32 MapAddr(int32 map, int32 addr)
+/* 1-to-1 map for I/O devices */
+
+int32 MapAddr (int32 map, int32 addr)
 {
-    int32 page, phypage;
+    int32 page, phypage, paddr;
+    
+    if (map && DCH_ENABLED) {
+        map = DCH_MAP;
+        page = (addr >> MAP_V_PAGE) & MAP_M_PAGE;
+        phypage = Map[map][page];
+        /* DCH map is NOT write-protected by definition */
+        paddr = (phypage << MAP_V_PAGE) | (addr & MAP_M_OFFSET);
+        }
+    else {
+        paddr = addr;
+        }
+
+    return paddr;
+}
+
+
+int32 MapLastPage;
+
+int32 MapAddrEx(int32 map, int32 addr)
+{
+    int32 phypage;
     int32 paddr;
 
-    page = (addr >> MAP_V_PAGE) & MAP_M_PAGE;
-    switch (MapMode) {
-    case MODE_SVR:
-        phypage = (31 == page) ?  Map[MAP_USR][31] : page;
-        break;
-    case MODE_USR:
-        phypage = Map[MAP_USR][page];
-        break;
+    if (MapFetchDelay && !--MapFetchDelay) {
+        if (MapEnable) {
+            MapMode = MODE_USR; MapUse = USR_MAP;
+            MapEnable = 0;
+        } else if (MapSingleCycle) {
+            MapUse = USR_MAP;
+        }
+    }
+    MapLastPage = (addr >> MAP_V_PAGE) & MAP_M_PAGE;
+    if ((SVR_MAP == map) && (31 == MapLastPage)) {
+        map = USR_MAP;
+        }
+    phypage = Map[map][MapLastPage];
+    if ((USR_MAP == map) && 0377 == phypage) {
+        MapStatus |= MAP_STA_V;
+        MapInvAddr = addr;
     }
     paddr = (phypage << MAP_V_PAGE) | (addr & MAP_M_OFFSET);
     return paddr;
 }
 
+#define MAP_STA_SIM   0004000
+
 int32 GetMap(int32 addr)
 {
     int32 paddr;
 
-    paddr = MapAddr(addr);
+    paddr = MapAddrEx(MapUse, addr);
+    if (VALID_PROT) {
+        /* SingleCycle??? */
+        if (FetchCycle)
+            TRAP(IO_V_JMP);
+        return 0;
+        }
     return M[paddr];
 }
 
@@ -1618,7 +1900,16 @@ int32 PutMap(int32 addr, int32 data)
 {
     int32 paddr;
 
-    paddr = MapAddr(map);
+    paddr = MapAddrEx(MapUse, addr);
+    if (VALID_PROT) {
+        /* SingleCycle??? */
+        TRAP(IO_V_JMP);
+        }
+    if (WRITE_PROT && (Map[MapUse][MapLastPage] & MAP_M_WP)) {
+        MapStatus |= MAP_STA_WR;
+        MapInvAddr = addr;
+        TRAP(DEFER_WR_JMP);
+    }
     M[paddr] = data;
     return data;
 }

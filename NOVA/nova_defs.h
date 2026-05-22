@@ -81,8 +81,9 @@
                                 /*          Nova        */
                                 /*----------------------*/
 
-#define MAXMEMSIZE      65536                           /* max memory size in 16-bit words: 32KW = DG max, */
+#define MAXMEMSIZE      131072                          /* max memory size in 16-bit words: 32KW = DG max, */
                                                         /* 64 KW = 3rd-party extended memory feature  */
+                                                        /* 128KW = mapped Nova 840   */
 #define DFTMEMSIZE      32768                           /* default/initial mem size  */
 #define MEM_ADDR_OK(x)  (((uint32) (x)) < (uint32) MEMSIZE)
 
@@ -191,8 +192,12 @@
 #define DEV_LOW         010                             /* lowest intr dev */
 #define DEV_HIGH        051                             /* highest intr dev */
 #define DEV_MDV         001                             /* multiply/divide */
+#if defined(ECLIPSE)
 #define DEV_ECC         002                             /* ECC memory control */
 #define DEV_MAP         003                             /* MMPU control */
+#else
+#define DEV_MMPU        002                             /* Nova 840 MMPU */
+#endif
 #define DEV_TTI         010                             /* console input */
 #define DEV_TTO         011                             /* console output */
 #define DEV_PTR         012                             /* paper tape reader */

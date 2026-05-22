@@ -1129,7 +1129,8 @@ do  {
     else if (uptr->FUNC == FCCY_WRITE) {                /* write? */
             for (dx = 0; dx < DZP_NUMWD; dx++) {        /* loop into buffer */
                 pa = MapAddr (dzp_map, (dzp_ma & AMASK));
-                tbuf[dx] = M[pa];
+                if (MEM_ADDR_OK (pa))
+                    tbuf[dx] = M[pa];
                 dzp_ma = (dzp_ma + 1) & AMASK;
                 }
             fxwrite (tbuf, sizeof(int16), DZP_NUMWD, uptr->fileref);
