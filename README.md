@@ -1,5 +1,5 @@
-Mapped Nova 840 in Fixnum days
-==============================
+Mapped Nova 840 in 3 days
+=========================
 
 I have added the Nova 840 MMPU to SimH with 128KW memory. Since the 6067-type RDOS disk contains MRDOS,
 I was able to experiment with it.
