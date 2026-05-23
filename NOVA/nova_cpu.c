@@ -283,6 +283,7 @@
 
 typedef struct
     {
+    int32    paddr;
     int32    pc;
     int16    ir;
     int16    ac0 ;
@@ -325,6 +326,7 @@ int32 AMASK = 077777 ;                                  /* current memory addres
 static  int32    hist_p   = 0 ;                         /* history pointer */
 static  int32    hist_cnt = 0 ;                         /* history count   */
 static  Hist_entry * hist = NULL ;                      /* instruction history */
+int hist_fprintf( FILE * fp, int itemNum, Hist_entry * hptr );
 
 
 t_stat cpu_ex (t_value *vptr, t_addr addr, UNIT *uptr, int32 sw);
@@ -336,13 +338,51 @@ t_stat build_devtab (void);
 
 t_stat hist_set( UNIT * uptr, int32 val, char * cptr, void * desc ) ;
 t_stat hist_show( FILE * st, UNIT * uptr, int32 val, void * desc ) ;
-static int hist_save( int32 pc, int32 our_ir ) ;
+static int hist_save( int32 paddr, int32 pc, int32 our_ir ) ;
 char * devBitNames( int32 flags, char * ptr, char * sepStr ) ;
 
 void mask_out (int32 mask);
 
+void mmpu_delay(void);
 int32 GetMap(int32 addr);
 int32 PutMap(int32 addr, int32 data);
+int32 GetMapNoDelay(int32 addr);
+int32 PutMapNoDelay(int32 addr, int32 data);
+
+#define HIST_RECENT     20
+void hist_recent(void)
+{
+    int x, i;
+
+    if (hist_cnt) {
+        x = hist_p;
+        x -= HIST_RECENT-1;
+        if (x < 0) x += hist_cnt;
+        for (i = 0; i < HIST_RECENT; i++) {
+            hist_fprintf(stdout, 1, &hist[x]);
+            if (++x == hist_cnt)
+                x = 0;
+        }
+    }
+}
+
+int32 IndStep(int32 x, int32* pindf)
+{
+    int32 val;
+
+    val = GetMapNoDelay(x);
+    *pindf = val & A_IND;  /* return next level indicator */
+    if ( ((x) <= AUTO_TOP) && ((x) >= AUTO_INC) ) {
+        if ( (x) < AUTO_DEC )
+            val = (val + 1) & DMASK;
+        else
+            val = (val - 1) & DMASK;
+        PutMapNoDelay(x, val);
+        }
+    x = val & AMASK;
+    mmpu_delay();
+    return x;
+}
 
 #define SVR_MAP     0
 #define USR_MAP     1
@@ -353,6 +393,11 @@ int32 PutMap(int32 addr, int32 data);
 
 #define MAP_M_WP    0200
 #define MAP_M_PPAGE 0177
+
+#define NIOC_MMPU   060202
+
+static char modes[] = "SU";
+static char uses[] = "SUD";
 
 int32 MapMode;          /* MODE_SVR MODE_USR */
 int32 MapUse;           /* which map to use */
@@ -369,6 +414,9 @@ int32 MapEnable = 0;    /* Enable User Map in progress */
 int32 MapSingleCycle = 0;/* Single Cycle in progress */
 int32 MapFetchDelay = 0;/* delay MMPU operation (Enable User Map/Enable Single Cycle) */
 int32 FetchCycle = 0;   /* FETCH cycle */
+int32 DeferCycle = 0;   /* DEFER cycle */
+int32 MapLastPage;      /* last mapped logical page */
+int32 MapLastPAddr;     /* last mapped phyiscal address */
 /* INT off and clear INT_NO_ION_PENDING mask, this will prevent ION_DELAY */
 #define INHIBIT_IO      { int_req &= ~INT_ION; int_no_ion_pending = 0; }
 
@@ -382,8 +430,8 @@ int32 FetchCycle = 0;   /* FETCH cycle */
 #define LDM_M_DCH    0020000
 #define LDM_V_LPAGE  8
 #define LDM_M_LPAGE  037
-#define LDM_M_WP     0000200
-#define LDM_M_PPAGE  0000177
+#define LDM_M_WP     MAP_M_WP
+#define LDM_M_PPAGE  MAP_M_PPAGE
 
 #define DOA_LDDP     0040000    /* LOAD DEVICE PROTECTION */
 #define LDDP_V_DCLS  8
@@ -425,8 +473,8 @@ static char *ldpc_bits[] = {
 #define MAP_STA_RSVD  0002000
 #define MAP_STA_DEFER 0001000
 #define MAP_STA_FP    0000400
-#define MAP_STA_WP    0000200
-#define MAP_STA_PPAGE 0000177
+#define MAP_STA_WP    MAP_M_WP
+#define MAP_STA_PPAGE MAP_M_PPAGE
 
 static char *map_sta_bits[] = {
     "","","",
@@ -453,7 +501,7 @@ void decode_ldpc(char *msg, int32 x)
 void decode_map_sta(char *msg, int32 x)
 {
     if (MMPU_TRACE(2)) {
-        printf(" PAGE=%03o", x & 0177);
+        printf(" PAGE=%03o", x & MAP_M_PPAGE);
         decode_bits(msg, x, map_sta_bits);
         }
 }
@@ -463,19 +511,32 @@ t_stat mmpu_reset(DEVICE *dptr)
     int i;
 
     MapMode = MODE_SVR;         /* supervisor mode */
+    MapUse = SVR_MAP;           /* use SVR map */
     MapProtCtrl &= ~LDPC_M_DCH; /* data channel map disabled */
     for (i = 0; i < 32; i++) {
         Map[SVR_MAP][i] = i;    /* logical page 31 mapped to physical page 31 */
-        Map[DCH_MAP][i] = i;
+        Map[DCH_MAP][i] = i;    /* DCH map is the same as SVR map */
         }
     Map[USR_MAP][31] = 31;
-    MapUse = SVR_MAP;           /* use SVR map */
     return SCPE_OK;
 }
 
 t_stat mmpu_svc (UNIT *uptr)
 {
     return SCPE_OK;
+}
+
+void mmpu_delay(void)
+{
+    if (MapFetchDelay && !--MapFetchDelay) {
+        if (MapEnable) {
+            MapMode = MODE_USR; MapUse = USR_MAP;
+            MapEnable = 0;
+            }
+        else if (MapSingleCycle) {
+            MapUse = USR_MAP;
+            }
+        }
 }
 
 int32 mmpu(int32 pulse, int32 code, int32 AC)
@@ -511,7 +572,7 @@ int32 mmpu(int32 pulse, int32 code, int32 AC)
                 printf("LDM %06o (%s %02o:%03o)", AC, AC & LDM_M_DCH ? "DCH" : "USR", page, 0377 & AC);
                 }
             if (AC & LDM_M_DCH) {
-                Map[DCH_MAP][page] = 0177 & AC;
+                Map[DCH_MAP][page] = MAP_M_PPAGE & AC;
             } else {
                 Map[USR_MAP][page] = 0377 & AC;
                 if (31 == page)
@@ -550,8 +611,6 @@ int32 mmpu(int32 pulse, int32 code, int32 AC)
     case ioDOB:
         break;
     case ioDIC: /* READ STATUS */
-#define MAP_STA_WP    0000200
-#define MAP_STA_PPAGE 0000177
         rval = MapStatus & ~0377;
         if (MODE_USR == MapModeINT) rval |= MAP_STA_USR;
         page = (MapPageCheck >> IPC_V_LPAGE) & IPC_M_LPAGE;
@@ -568,14 +627,14 @@ int32 mmpu(int32 pulse, int32 code, int32 AC)
     if (ioNIO == code) {
         switch (pulse) {
         case iopS: /* ENABLE USER MAP */
-            if (MMPU_TRACE(2)) {
+            if (MMPU_TRACE(1)) {
                 printf("ENUM");
                 }
             MapEnable = 1; /* 3 cycles */
             MapFetchDelay = 3;
             break;
         case iopP: /* ENABLE SINGLE CYCLE */
-            if (MMPU_TRACE(2)) {
+            if (MMPU_TRACE(1)) {
                 printf("ENSC");
                 }
             MapSingleCycle = 1; /* 2 cycles */
@@ -590,12 +649,13 @@ int32 mmpu(int32 pulse, int32 code, int32 AC)
             MapStatus = 0;
             break;
         case iopC: /* SUPERVISOR CALL */
-            if (MMPU_TRACE(2)) {
+            if (MMPU_TRACE(1)) {
                 printf("SVC");
                 }
             INHIBIT_IO;
             MapMode = MODE_SVR; MapUse = SVR_MAP;
             PC = 042;
+            break;
         }
         }
 
@@ -734,8 +794,10 @@ UNIT mmpu_unit = { UDATA (NULL, UNIT_17B, MAXMEMSIZE) };
 
 REG mmpu_reg[] = {
     { ORDATA (STATUS, MapStatus, 16) },
-    { ORDATA (ENABLE, MapUse, 16) },
+    { ORDATA (ENABLE, MapEnable, 16) },
     { ORDATA (ACTIVE, MapUse, 16) },
+    { ORDATA (MADDR, MapInvAddr, 16) },
+    { ORDATA (IADDR, MapInstrAddr, 16) },
     { ORDATA (CYCLE, MapSingleCycle, 16) },
     { ORDATA (CHECK, MapPageCheck, 16) },
     { DRDATA (TRACE, mmpu_trace,   32) },
@@ -758,7 +820,14 @@ DEVICE mmpu_dev = {
 
 #include <setjmp.h>
 static jmp_buf MapTrap;
-#define TRAP(pc)    { if (MapSingleCycle) MapStatus |= MAP_STA_SIM; if (USR_MAP == MapUse) longjmp(MapTrap, pc); }
+#define TRAP(pc)    { \
+    if (MMPU_TRACE(2)) { \
+        printf("TRAP @ %s:%d\r\n", __func__,__LINE__); \
+        } \
+    if (MapSingleCycle) MapStatus |= MAP_STA_SIM; \
+    hist_recent(); \
+    if (MODE_USR == MapMode) longjmp(MapTrap, pc); \
+    }
 
 t_stat sim_instr (void)
 {
@@ -776,11 +845,16 @@ reason = 0;
 
 /* Main instruction fetch/decode loop */
 
+InitMMPUTrap:
 if ((i = setjmp(MapTrap))) {                            /* MMPU trap */
     INHIBIT_IO;
     MapMode = MODE_SVR; MapUse = SVR_MAP;
     PC = i;
     reason = 0;
+    if (MMPU_TRACE(2)) {
+        printf("MMPU TRAP %03o\r\n", PC);
+        }
+    goto InitMMPUTrap;
 }
 
 while (reason == 0) {                                   /* loop until halted */
@@ -791,10 +865,14 @@ while (reason == 0) {                                   /* loop until halted */
         }
 
     if (VALID_PROT) {                                   /* validity protection */
-        INHIBIT_IO;                                 /* during defer/execute cycle */
+        INHIBIT_IO;                                     /* during defer/execute cycle */
         MapMode = MODE_SVR; MapUse = SVR_MAP;
         PC = IO_V_JMP;
+        if (MMPU_TRACE(2)) {
+            printf("MMPU VPROT %03o\r\n", PC);
+            }
         }
+
 
     if (!MapFetchDelay && MapSingleCycle) {             /* end of Single Cycle */
         MapUse = SVR_MAP;
@@ -813,6 +891,9 @@ while (reason == 0) {                                   /* loop until halted */
         else {
             int_req = int_req & ~INT_ION;               /* intr off */
             PCQ_ENTRY;                                  /* save old PC */
+            if (MMPU_TRACE(2)) {
+                printf("INTREQ PC=%06o M=%c U=%c\r\n", PC, modes[MapMode], uses[MapUse]);
+                }
             PutMap(INT_SAV, PC);                        /* save in logical 0 */
             MapModeINT = MapMode;
             MapMode = MODE_SVR; MapUse = SVR_MAP;
@@ -824,13 +905,15 @@ while (reason == 0) {                                   /* loop until halted */
                 MA = INT_JMP;                           /* intr: jmp @1 */
         }
         if ( MODE_64K_ACTIVE ) {
-            indf = IND_STEP (MA);
+            DeferCycle = 1; MA = IndStep(MA, &indf); DeferCycle = 0;
             }
         else
             {
+            DeferCycle = 1;
             for (i = 0, indf = 1; indf && (i < ind_max); i++) {
-                indf = IND_STEP (MA);                       /* indirect loop */
+                MA = IndStep(MA, &indf);                /* indirect loop */
                 }
+            DeferCycle = 0;
             if (i >= ind_max) {
                 reason = STOP_IND_INT;
                 break;
@@ -849,7 +932,7 @@ while (reason == 0) {                                   /* loop until halted */
     
     if ( hist_cnt )
         {
-        hist_save( PC, IR ) ;                           /*  PC, int_req unchanged */
+        hist_save( MapLastPAddr, PC, IR ) ;             /*  PC, int_req unchanged */
         }
 
     INCREMENT_PC ;
@@ -988,17 +1071,22 @@ while (reason == 0) {                                   /* loop until halted */
 
         if ( (indf = IR & I_IND) ) {                    /* indirect? */
             if ( MODE_64K_ACTIVE ) {                    /* 64k mode? */
-                indf = IND_STEP (MA);
+                DeferCycle = 1; MA = IndStep(MA, &indf); DeferCycle = 0;
                 }
             else                                        /* compat mode */
                 {
-                 for (i = 0; indf && (i < ind_max); i++) {   /* count */
-                    indf = IND_STEP (MA);               /* resolve indirect */
-                }
+                DeferCycle = 1;
+                for (i = 0; indf && (i < ind_max); i++) {   /* count */
+                    MA = IndStep(MA, &indf);            /* resolve indirect */
+                    }
+                DeferCycle = 0;
                 if (i >= ind_max) {                     /* too many? */
                     if (DEFER_PROT) {
                         MapStatus |= MAP_STA_DEFER;
-                        MapInvAddr = indf;
+                        MapInvAddr = MA;
+                        if (MMPU_TRACE(2)) {
+                            printf("DEFER_PROT: IADDR=%06o MADDR=%06o\r\n", MapInstrAddr, MapInvAddr);
+                            }
                         TRAP(DEFER_WR_JMP);
                         }
                     else
@@ -1070,9 +1158,12 @@ while (reason == 0) {                                   /* loop until halted */
         pulse = I_GETPULSE (IR);
         device = I_GETDEV (IR);
         if (IO_PROT) {
-            if (MapDevProt[HI(code)] & (1 << (7 - LO(code)))) {
+            if ((NIOC_MMPU != IR) && MapDevProt[HI(device)] & (1 << (7 - LO(device)))) {
                 MapStatus |= MAP_STA_IO;
                 MapInvAddr = MapInstrAddr;
+                if (MMPU_TRACE(2)) {
+                    printf("IO_PROT: IADDR=%06o MADDR=%06o (dev=%02o)\r\n", MapInstrAddr, MapInvAddr, device);
+                    }
                 TRAP(IO_V_JMP);
             }
         }
@@ -1448,7 +1539,7 @@ while (reason == 0) {                                   /* loop until halted */
             }    /*  end of 'switch'  */
         }    /*  end of handling non-existant device  */
       else reason = stop_dev;
-      }                                                 /* end if IOT */    
+      }                                                 /* end if IOT */
     }                                                   /* end while */
 
 /* Simulation halted */
@@ -1673,7 +1764,7 @@ typedef struct
 
 /*  save history entry  (proposed local routine) */
 
-static int hist_save( int32 pc, int32 our_ir )
+static int hist_save( int32 paddr, int32 pc, int32 our_ir )
 {
 Hist_entry *    hist_ptr ;
 
@@ -1689,6 +1780,7 @@ if ( hist )
 
     /*  (machine-specific stuff)  */
 
+    hist_ptr->paddr = paddr;
     hist_ptr->pc    = pc ;
     hist_ptr->ir    = our_ir ;
     hist_ptr->ac0   = AC[ 0 ] ;
@@ -1760,13 +1852,14 @@ if ( hptr )
         {
         fprintf( fp, "\n\n" ) ;
         }
-    fprintf( fp, "%05o / %06o   %06o  %06o  %06o  %06o  %o   ",
-        (hptr->pc  & 0x7FFF),
-        (hptr->ir  & 0xFFFF),
-        (hptr->ac0 & 0xFFFF),
-        (hptr->ac1 & 0xFFFF),
-        (hptr->ac2 & 0xFFFF),
-        (hptr->ac3 & 0xFFFF),
+    fprintf( fp, "%06o:%05o / %06o   %06o  %06o  %06o  %06o  %o   ",
+        (hptr->paddr & 0377777),
+        (hptr->pc    & 0077777),
+        (hptr->ir    & 0177777),
+        (hptr->ac0   & 0177777),
+        (hptr->ac1   & 0177777),
+        (hptr->ac2   & 0177777),
+        (hptr->ac3   & 0177777),
         (hptr->carry & 1)
         ) ;
     if ( cpu_unit.flags & UNIT_STK  /* Nova 3 or Nova 4 */ ) 
@@ -1856,6 +1949,7 @@ struct Dbits
     { INT_NO_ION_PENDING, 1, "IONPND"  },    /*  (invert this logic to provide cleaner display)  */
     { INT_STK,    0,    "STK"    },
     { INT_PIT,    0,    "PIT"    },
+    { INT_DZP,    0,    "DZP"    },
     { INT_DKP,    0,    "DKP"    },
     { INT_DSK,    0,    "DSK"    },
     { INT_MTA,    0,    "MTA"    },
@@ -1903,31 +1997,35 @@ return ( ptr ) ;
 #define MAP_M_PAGE      037
 #define MAP_M_OFFSET    01777
 
-int32 MapLastPage;
+#define PAGE(a)     (((a) >> MAP_V_PAGE) & MAP_M_PAGE)
+#define POFF(a)     ((a) & MAP_M_OFFSET)
 
-int32 MapAddrEx(int32 map, int32 addr)
+int32 MapAddrEx(int32 map, int32 addr, char op)
 {
     int32 phypage;
     int32 paddr;
+    int prin = 0;
 
-    if (MapFetchDelay && !--MapFetchDelay) {
-        if (MapEnable) {
-            MapMode = MODE_USR; MapUse = USR_MAP;
-            MapEnable = 0;
-        } else if (MapSingleCycle) {
-            MapUse = USR_MAP;
-        }
-    }
     MapLastPage = (addr >> MAP_V_PAGE) & MAP_M_PAGE;
     if ((SVR_MAP == map) && (31 == MapLastPage)) {
         map = USR_MAP;
         }
     phypage = Map[map][MapLastPage];
     if ((USR_MAP == map) && 0377 == phypage) {
+        if (MMPU_TRACE(2)) {
+            printf("MAP_STA_V: map=%c addr=%06o page=%02o\r\n", uses[map], addr, MapLastPage);
+            prin = 1;
+            }
         MapStatus |= MAP_STA_V;
         MapInvAddr = addr;
     }
-    paddr = (phypage << MAP_V_PAGE) | (addr & MAP_M_OFFSET);
+    paddr = ((phypage & MAP_M_PPAGE) << MAP_V_PAGE) | (addr & MAP_M_OFFSET);
+    if (MMPU_TRACE(2)) {
+        if (MapEnable || MapSingleCycle) {
+            printf("#%d-%d %c %c%06o (%02o,%04o) %c%06o [%06o]\r\n",MapFetchDelay,DeferCycle,op,modes[MapMode], addr, PAGE(addr),POFF(addr), uses[map], paddr, M[paddr]);
+            }
+        }
+
     return paddr;
 }
 
@@ -1944,39 +2042,66 @@ int32 MapAddr (int32 map, int32 addr)
         }*/
 
     map = /*map &&*/ DCH_ENABLED ? DCH_MAP : SVR_MAP;
-    paddr = MapAddrEx(map, addr);
+    paddr = MapAddrEx(map, addr, 'X');
     return paddr;
 }
 
-int32 GetMap(int32 addr)
+int32 GetMapNoDelay(int32 addr)
 {
     int32 paddr;
 
-    paddr = MapAddrEx(MapUse, addr);
+    paddr = MapAddrEx(MapUse, addr, FetchCycle ? 'F' : DeferCycle ? 'D' : 'G');
+    MapLastPAddr = paddr;
     if (VALID_PROT) {
         /* SingleCycle??? */
-        if (FetchCycle)
+        if (FetchCycle) {
+            if (MMPU_TRACE(2)) {
+                printf("VALID_PROT: IADDR=%06o MADDR=%06o fetch\r\n", MapInstrAddr, MapInvAddr);
+                }
             TRAP(IO_V_JMP);
+            }
         return 0;
         }
     return M[paddr];
 }
 
-int32 PutMap(int32 addr, int32 data)
+int32 GetMap(int32 addr)
+{
+    int32 data;
+
+    data = GetMapNoDelay(addr);
+    mmpu_delay();
+    return data;
+}
+
+int32 PutMapNoDelay(int32 addr, int32 data)
 {
     int32 paddr;
 
-    paddr = MapAddrEx(MapUse, addr);
+    paddr = MapAddrEx(MapUse, addr, 'P');
+    MapLastPAddr = paddr;
     if (VALID_PROT) {
         /* SingleCycle??? */
+        if (MMPU_TRACE(2)) {
+            printf("VALID_PROT: IADDR=%06o MADDR=%06o put\r\n", MapInstrAddr, MapInvAddr);
+            }
         TRAP(IO_V_JMP);
         }
     if (WRITE_PROT && (Map[MapUse][MapLastPage] & MAP_M_WP)) {
         MapStatus |= MAP_STA_WR;
         MapInvAddr = addr;
+        if (MMPU_TRACE(2)) {
+            printf("WRITE_PROT: IADDR=%06o MADDR=%06o\r\n", MapInstrAddr, MapInvAddr);
+            }
         TRAP(DEFER_WR_JMP);
     }
     M[paddr] = data;
     return data;
 }
 
+int32 PutMap(int32 addr, int32 data)
+{
+    PutMapNoDelay(addr, data);
+    mmpu_delay();
+    return data;
+}
