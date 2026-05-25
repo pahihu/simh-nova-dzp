@@ -1,3 +1,23 @@
+Mapped Nova 840 in 3 days
+=========================
+
+I have added the Nova 840 MMPU to SimH with 128KW memory. Since the 6067-type RDOS disk contains MRDOS,
+I was able to experiment with it.
+
+Milestones
+
+* DCH map is the same as the supervisor map on reset
+* fixed Enable User Map, Enable Single Cycle
+* indirection is a single cycle (READ + WRITE)
+* NIOC x,MMPU can be executed even when device is protected (supervisor call)
+* fixed I/O protection check
+
+Documentation
+
+* 015-000023-03 Programmer's Reference Manual NOVA LINE COMPUTERS, 1976\
+    *Memory management pp.45*
+
+
 DZP in 3 days
 =============
 
