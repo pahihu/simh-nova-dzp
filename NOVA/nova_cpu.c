@@ -269,6 +269,7 @@
 #define UNIT_MMPU       (1 << UNIT_V_MMPU)
 #define UNIT_MSIZE      (1 << UNIT_V_MSIZE)
 #define UNIT_IOPT       (UNIT_MDV | UNIT_STK | UNIT_BYT | UNIT_64KW | UNIT_MMPU)
+#define UNIT_NOVA       0
 #define UNIT_NOVA840    (UNIT_MDV | UNIT_MMPU)
 #define UNIT_NOVA3      (UNIT_MDV | UNIT_STK)
 #define UNIT_NOVA4      (UNIT_MDV | UNIT_STK | UNIT_BYT)
@@ -304,6 +305,7 @@ uint16 M[MAXMEMSIZE] = { 0 };                           /* memory */
 int32 AC[4] = { 0 };                                    /* accumulators */
 int32 C = 0;                                            /* carry flag */
 int32 PC = 0;
+int32 PPC = 0;                                          /* prev. PC (fetch) */
 int32 saved_PC = 0;                                     /* program counter */
 int32 SP = 0;                                           /* stack pointer */
 int32 FP = 0;                                           /* frame pointer */
@@ -485,9 +487,18 @@ static char *map_sta_bits[] = {
     "USR"
 };
 
+/* MMPU trace bits
+ *
+ *   1 - print I/O instructions
+ *   2 - decode I/O instructions
+ *   4 - decode MMPU status bits
+ *   8 - print TRAP
+ *  16 - show last 20 instructions, break at TRAP
+ */
+
 
 int32 mmpu_trace = 0;
-#define MMPU_TRACE(x)   (mmpu_trace & (1 << (x)))
+#define MMPU_TRACE(x)   (mmpu_trace && (mmpu_trace & (1 << (x))))
 
 extern void decode_bits(char *msg, int32 x, char** bits);
 
@@ -518,6 +529,7 @@ t_stat mmpu_reset(DEVICE *dptr)
         Map[DCH_MAP][i] = i;    /* DCH map is the same as SVR map */
         }
     Map[USR_MAP][31] = 31;
+    MapStatus = 0;              /* clear status */
     return SCPE_OK;
 }
 
@@ -654,10 +666,11 @@ int32 mmpu(int32 pulse, int32 code, int32 AC)
                 }
             INHIBIT_IO;
             MapMode = MODE_SVR; MapUse = SVR_MAP;
+            MapInstrAddr = PPC;
             PC = 042;
             break;
-        }
-        }
+            }                                           /* switch end */
+        }                                               /* NIO end */
 
     if (MMPU_TRACE(0)) {
         if ( code & 1 ) {
@@ -750,6 +763,7 @@ REG cpu_reg[] = {
     };
 
 MTAB cpu_mod[] = {
+    { UNIT_IOPT, UNIT_NOVA, "NOVA", "NOVA", NULL },
     { UNIT_IOPT, UNIT_NOVA840, "NOVA840", "NOVA840", NULL },
     { UNIT_IOPT, UNIT_NOVA3, "NOVA3", "NOVA3", NULL },
     { UNIT_IOPT, UNIT_NOVA4, "NOVA4", "NOVA4", NULL },
@@ -814,18 +828,17 @@ DEVICE mmpu_dev = {
     1, 8, 17, 1, 8, 16,
     &mmpu_ex, &mmpu_dep, &mmpu_reset,
     NULL, NULL, NULL,
-    &mmpu_dib, DEV_DISABLE
+    &mmpu_dib, DEV_DIS | DEV_DISABLE
 };
 
 
 #include <setjmp.h>
 static jmp_buf MapTrap;
 #define TRAP(pc)    { \
-    if (MMPU_TRACE(2)) { \
+    if (MMPU_TRACE(3)) { \
         printf("TRAP @ %s:%d\r\n", __func__,__LINE__); \
         } \
-    if (MapSingleCycle) MapStatus |= MAP_STA_SIM; \
-    hist_recent(); \
+    if (MapSingleCycle) { MapInstrAddr = PPC; MapStatus |= MAP_STA_SIM; } \
     if (MODE_USR == MapMode) longjmp(MapTrap, pc); \
     }
 
@@ -833,6 +846,7 @@ t_stat sim_instr (void)
 {
 int32 IR, i;
 t_stat reason;
+int32 initMMUTrap;
 
 /* Restore register state */
 
@@ -842,6 +856,7 @@ PC = saved_PC & AMASK;                                  /* load local PC */
 C = C & CBIT;
 mask_out (pimask);                                      /* reset int system */
 reason = 0;
+initMMUTrap = 0;
 
 /* Main instruction fetch/decode loop */
 
@@ -851,11 +866,18 @@ if ((i = setjmp(MapTrap))) {                            /* MMPU trap */
     MapMode = MODE_SVR; MapUse = SVR_MAP;
     PC = i;
     reason = 0;
-    if (MMPU_TRACE(2)) {
+    if (MMPU_TRACE(3)) {
         printf("MMPU TRAP %03o\r\n", PC);
         }
+    initMMUTrap = 1;
     goto InitMMPUTrap;
-}
+    }
+else {
+    if (initMMUTrap && MMPU_TRACE(4)) {
+        hist_recent();
+        reason = STOP_IBKPT;                            /* stop simulation */
+        }
+    }
 
 while (reason == 0) {                                   /* loop until halted */
 
@@ -868,11 +890,15 @@ while (reason == 0) {                                   /* loop until halted */
         INHIBIT_IO;                                     /* during defer/execute cycle */
         MapMode = MODE_SVR; MapUse = SVR_MAP;
         PC = IO_V_JMP;
-        if (MMPU_TRACE(2)) {
+        if (MMPU_TRACE(3)) {
             printf("MMPU VPROT %03o\r\n", PC);
             }
+        if (MMPU_TRACE(4)) {
+            hist_recent();
+            reason = STOP_IBKPT;                        /* stop simulation */
+            break;
+            }
         }
-
 
     if (!MapFetchDelay && MapSingleCycle) {             /* end of Single Cycle */
         MapUse = SVR_MAP;
@@ -927,7 +953,7 @@ while (reason == 0) {                                   /* loop until halted */
         break;
         }
 
-    MapInstrAddr = PC;                                  /* save instr. address */
+    PPC = PC;                                           /* save instr. address */
     FetchCycle = 1; IR = GetMap(PC); FetchCycle = 0;    /* fetch instr */
     
     if ( hist_cnt )
@@ -1083,7 +1109,7 @@ while (reason == 0) {                                   /* loop until halted */
                 if (i >= ind_max) {                     /* too many? */
                     if (DEFER_PROT) {
                         MapStatus |= MAP_STA_DEFER;
-                        MapInvAddr = MA;
+                        MapInstrAddr = PPC; MapInvAddr = MA;
                         if (MMPU_TRACE(2)) {
                             printf("DEFER_PROT: IADDR=%06o MADDR=%06o\r\n", MapInstrAddr, MapInvAddr);
                             }
@@ -1160,7 +1186,7 @@ while (reason == 0) {                                   /* loop until halted */
         if (IO_PROT) {
             if ((NIOC_MMPU != IR) && MapDevProt[HI(device)] & (1 << (7 - LO(device)))) {
                 MapStatus |= MAP_STA_IO;
-                MapInvAddr = MapInstrAddr;
+                MapInstrAddr = PPC; MapInvAddr = MapInstrAddr;
                 if (MMPU_TRACE(2)) {
                     printf("IO_PROT: IADDR=%06o MADDR=%06o (dev=%02o)\r\n", MapInstrAddr, MapInvAddr, device);
                     }
@@ -2008,20 +2034,22 @@ int32 MapAddrEx(int32 map, int32 addr, char op)
 
     MapLastPage = (addr >> MAP_V_PAGE) & MAP_M_PAGE;
     if ((SVR_MAP == map) && (31 == MapLastPage)) {
-        map = USR_MAP;
+        phypage = Map[map][MapLastPage];
         }
-    phypage = Map[map][MapLastPage];
-    if ((USR_MAP == map) && 0377 == phypage) {
-        if (MMPU_TRACE(2)) {
-            printf("MAP_STA_V: map=%c addr=%06o page=%02o\r\n", uses[map], addr, MapLastPage);
-            prin = 1;
+    else {
+        phypage = Map[map][MapLastPage];
+        if ((USR_MAP == map) && 0377 == phypage) {
+            if (MMPU_TRACE(2)) {
+                printf("MAP_STA_V: map=%c addr=%06o page=%02o\r\n", uses[map], addr, MapLastPage);
+                prin = 1;
+                }
+            MapStatus |= MAP_STA_V;
+            MapInstrAddr = PPC; MapInvAddr = addr;
             }
-        MapStatus |= MAP_STA_V;
-        MapInvAddr = addr;
-    }
+        }
     paddr = ((phypage & MAP_M_PPAGE) << MAP_V_PAGE) | (addr & MAP_M_OFFSET);
     if (MMPU_TRACE(2)) {
-        if (MapEnable || MapSingleCycle) {
+        if (prin || MapEnable || MapSingleCycle) {
             printf("#%d-%d %c %c%06o (%02o,%04o) %c%06o [%06o]\r\n",MapFetchDelay,DeferCycle,op,modes[MapMode], addr, PAGE(addr),POFF(addr), uses[map], paddr, M[paddr]);
             }
         }
@@ -2089,7 +2117,7 @@ int32 PutMapNoDelay(int32 addr, int32 data)
         }
     if (WRITE_PROT && (Map[MapUse][MapLastPage] & MAP_M_WP)) {
         MapStatus |= MAP_STA_WR;
-        MapInvAddr = addr;
+        MapInstrAddr = PPC; MapInvAddr = addr;
         if (MMPU_TRACE(2)) {
             printf("WRITE_PROT: IADDR=%06o MADDR=%06o\r\n", MapInstrAddr, MapInvAddr);
             }
