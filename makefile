@@ -1338,9 +1338,10 @@ NOVA_OPT = -I ${NOVAD}
 
 
 ECLIPSE = ${NOVAD}/eclipse_cpu.c ${NOVAD}/eclipse_tt.c ${NOVAD}/nova_sys.c \
-	${NOVAD}/nova_dkp.c ${NOVAD}/nova_dzp.c ${NOVAD}/nova_dsk.c ${NOVAD}/nova_lp.c \
+	${NOVAD}/nova_dkp.c ${NOVAD}/nova_dsk.c ${NOVAD}/nova_lp.c \
 	${NOVAD}/nova_mta.c ${NOVAD}/nova_plt.c ${NOVAD}/nova_pt.c \
-	${NOVAD}/nova_clk.c ${NOVAD}/nova_tt1.c ${NOVAD}/nova_qty.c
+	${NOVAD}/nova_clk.c ${NOVAD}/nova_tt1.c ${NOVAD}/nova_qty.c \
+	${NOVAD}/nova_dzp.c ${NOVAD}/dg_fpmath.c
 ECLIPSE_OPT = -I ${NOVAD} -DECLIPSE -DUSE_INT64
 
 
