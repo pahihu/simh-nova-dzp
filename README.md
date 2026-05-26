@@ -2,7 +2,7 @@ Mapped Nova 840 in 3 days
 =========================
 
 I have added the Nova 840 MMPU to SimH with 128KW memory. Since the 6067-type RDOS disk contains MRDOS,
-I was able to experiment with it.
+I was able to experiment with it. Passing NMORTs was another 2.5 hours.
 
 Milestones
 
@@ -11,6 +11,11 @@ Milestones
 * indirection is a single cycle (READ + WRITE)
 * NIOC x,MMPU can be executed even when device is protected (supervisor call)
 * fixed I/O protection check
+
+Passing short (DTOS) and long NMORTs
+
+* accessing logical page 31 from supervisor mode does not set the validity protection bit
+* NIOC x, MMPU sets the invalid instruction address register
 
 Documentation
 
