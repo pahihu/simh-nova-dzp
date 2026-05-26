@@ -65,8 +65,6 @@
 
 #include "nova_defs.h"
 
-#define XXX 0
-
 #define DZP_NUMDR       4                               /* #drives */
 #define DZP_NUMWD       256                             /* words/sector */
 #define UNIT_V_WLK      (UNIT_V_UF + 0)                 /* write locked */

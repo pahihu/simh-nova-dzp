@@ -1330,10 +1330,11 @@ PDP1_OPT = -I ${PDP1D}
 
 
 NOVAD = NOVA
-NOVA = ${NOVAD}/nova_sys.c ${NOVAD}/nova_cpu.c ${NOVAD}/nova_dkp.c ${NOVAD}/nova_dzp.c \
+NOVA = ${NOVAD}/nova_sys.c ${NOVAD}/nova_cpu.c ${NOVAD}/nova_dkp.c \
 	${NOVAD}/nova_dsk.c ${NOVAD}/nova_lp.c ${NOVAD}/nova_mta.c \
 	${NOVAD}/nova_plt.c ${NOVAD}/nova_pt.c ${NOVAD}/nova_clk.c \
-	${NOVAD}/nova_tt.c ${NOVAD}/nova_tt1.c ${NOVAD}/nova_qty.c
+	${NOVAD}/nova_tt.c ${NOVAD}/nova_tt1.c ${NOVAD}/nova_qty.c \
+	${NOVAD}/nova_dzp.c ${NOVAD}/nova_fpu.c ${NOVAD}/dg_fpmath.c
 NOVA_OPT = -I ${NOVAD}
 
 
