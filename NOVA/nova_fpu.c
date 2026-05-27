@@ -4,56 +4,60 @@
 #include "nova_defs.h"
 #include "dg_fpmath.h"
 
-#define IOP_S           0100
-#define IOP_C           0200
-#define IOP_P           0300
+#define IOP_S           iopS
+#define IOP_C           iopC
+#define IOP_P           iopP
 
-#define OP_NIO          060000
-#define OP_DIA          060400
-#define OP_DOA          061000
-#define OP_DOB          062000
-#define OP_DOC          063000
+#define OP_NIO          (ioNIO << 2)
+#define OP_DIA          (ioDIA << 2)
+#define OP_DOA          (ioDOA << 2)
+#define OP_DOB          (ioDOB << 2)
+#define OP_DOC          (ioDOC << 2)
+
+#define D_FPU           0
+#define D_FPU1          0
+#define D_FPU2          0
 
 /* memory reference instructions */
-#define FPP_FLDS        (OP_DOB + IOP_P + DEV_FPU1)     /* load single */
-#define FPP_FLDD        (OP_DOB + IOP_P + DEV_FPU2)     /* load double */
-#define FPP_FSRS        (OP_DOB + IOP_S + DEV_FPU1)     /* store single */
-#define FPP_FSRD        (OP_DOB + IOP_S + DEV_FPU2)     /* store double */
+#define FPP_FLDS        (OP_DOB + IOP_P + D_FPU1)     /* load single */
+#define FPP_FLDD        (OP_DOB + IOP_P + D_FPU2)     /* load double */
+#define FPP_FSRS        (OP_DOB + IOP_S + D_FPU1)     /* store single */
+#define FPP_FSRD        (OP_DOB + IOP_S + D_FPU2)     /* store double */
 
 /* arithmetic instructions */
-#define FPP_FAS         (OP_DOA +         DEV_FPU1)     /* add single */
-#define FPP_FAD         (OP_DOA +         DEV_FPU2)     /* add double */
-#define FPP_FSS         (OP_DOA + IOP_S + DEV_FPU1)     /* subtract single */
-#define FPP_FSD         (OP_DOA + IOP_S + DEV_FPU2)     /* subtract double */
-#define FPP_FMS         (OP_DOA + IOP_P + DEV_FPU1)     /* multiply single */
-#define FPP_FMD         (OP_DOA + IOP_P + DEV_FPU2)     /* multiply double */
-#define FPP_FDS         (OP_DOA + IOP_C + DEV_FPU1)     /* divide single */
-#define FPP_FDD         (OP_DOA + IOP_C + DEV_FPU2)     /* divide double */
+#define FPP_FAS         (OP_DOA +         D_FPU1)     /* add single */
+#define FPP_FAD         (OP_DOA +         D_FPU2)     /* add double */
+#define FPP_FSS         (OP_DOA + IOP_S + D_FPU1)     /* subtract single */
+#define FPP_FSD         (OP_DOA + IOP_S + D_FPU2)     /* subtract double */
+#define FPP_FMS         (OP_DOA + IOP_P + D_FPU1)     /* multiply single */
+#define FPP_FMD         (OP_DOA + IOP_P + D_FPU2)     /* multiply double */
+#define FPP_FDS         (OP_DOA + IOP_C + D_FPU1)     /* divide single */
+#define FPP_FDD         (OP_DOA + IOP_C + D_FPU2)     /* divide double */
 
 /* TEMP instructions */
-#define FPP_FMFT        (OP_NIO + IOP_P + DEV_FPU2)     /* move FPAC to TEMP */
-#define FPP_FMTF        (OP_NIO + IOP_C + DEV_FPU2)     /* move TEMP to FPAC */
-#define FPP_FATS        (OP_DOC +         DEV_FPU1)     /* add TEMP single */
-#define FPP_FATD        (OP_DOC +         DEV_FPU2)     /* add TEMP double */
-#define FPP_FSTS        (OP_DOC + IOP_S + DEV_FPU1)     /* subtract TEMP single */
-#define FPP_FSTD        (OP_DOC + IOP_S + DEV_FPU2)     /* subtract TEMP double */
-#define FPP_FMTS        (OP_DOC + IOP_P + DEV_FPU1)     /* multiply TEMP single */
-#define FPP_FMTD        (OP_DOC + IOP_P + DEV_FPU2)     /* multiply TEMP double */
-#define FPP_FDTS        (OP_DOC + IOP_C + DEV_FPU1)     /* divide TEMP single */
-#define FPP_FDTD        (OP_DOC + IOP_C + DEV_FPU2)     /* divide TEMP double */
+#define FPP_FMFT        (OP_NIO + IOP_P + D_FPU2)     /* move FPAC to TEMP */
+#define FPP_FMTF        (OP_NIO + IOP_C + D_FPU2)     /* move TEMP to FPAC */
+#define FPP_FATS        (OP_DOC +         D_FPU1)     /* add TEMP single */
+#define FPP_FATD        (OP_DOC +         D_FPU2)     /* add TEMP double */
+#define FPP_FSTS        (OP_DOC + IOP_S + D_FPU1)     /* subtract TEMP single */
+#define FPP_FSTD        (OP_DOC + IOP_S + D_FPU2)     /* subtract TEMP double */
+#define FPP_FMTS        (OP_DOC + IOP_P + D_FPU1)     /* multiply TEMP single */
+#define FPP_FMTD        (OP_DOC + IOP_P + D_FPU2)     /* multiply TEMP double */
+#define FPP_FDTS        (OP_DOC + IOP_C + D_FPU1)     /* divide TEMP single */
+#define FPP_FDTD        (OP_DOC + IOP_C + D_FPU2)     /* divide TEMP double */
 
 /* shift and logical instructions */
-#define FPP_FABS         (OP_NIO + IOP_P + DEV_FPU1)     /* absolute value */
-#define FPP_FCLR         (OP_NIO + IOP_S + DEV_FPU1)     /* clear FPAC */
-#define FPP_FLDX         (OP_DOB + IOP_C + DEV_FPU2)     /* load exponent */
-#define FPP_FNEG         (OP_NIO + IOP_C + DEV_FPU1)     /* negate */
-#define FPP_FNRM         (OP_NIO + IOP_S + DEV_FPU2)     /* normalize */
-#define FPP_FSCL         (OP_DOB +         DEV_FPU2)     /* scale */
-#define FPP_FHWD         (OP_DIA +         DEV_FPU1)     /* read high word */
+#define FPP_FABS        (OP_NIO + IOP_P + D_FPU1)     /* absolute value */
+#define FPP_FCLR        (OP_NIO + IOP_S + D_FPU1)     /* clear FPAC */
+#define FPP_FLDX        (OP_DOB + IOP_C + D_FPU2)     /* load exponent */
+#define FPP_FNEG        (OP_NIO + IOP_C + D_FPU1)     /* negate */
+#define FPP_FNRM        (OP_NIO + IOP_S + D_FPU2)     /* normalize */
+#define FPP_FSCL        (OP_DOB +         D_FPU2)     /* scale */
+#define FPP_FHWD        (OP_DIA +         D_FPU1)     /* read high word */
 
 /* status instructions */
-#define FPP_FRST         (OP_DIA + IOP_C + DEV_FPU)      /* read STATUS */
-#define FPP_FWST         (OP_DOA +         DEV_FPU)      /* write STATUS */
+#define FPP_FRST        (OP_DIA + IOP_C + D_FPU)      /* read STATUS */
+#define FPP_FWST        (OP_DOA +         D_FPU)      /* write STATUS */
 
 #define STA_ANY     0100000
 #define STA_OVF     0040000
@@ -125,11 +129,101 @@ t_stat fpp_reset(DEVICE *dptr)
 }
 
 
-int32 fpp(int32 pulse, int32 code, int32 AC)
+int32 fpp1(int32 pulse, int32 code, int32 AC)
 {
-    int32 rval;
+    int32 rval, ir;
 
     rval = 0;
+    ir = (code << 2) + pulse;
+    switch (ir) {
+        case FPP_FCLR: /* clear FPAC */
+            break;
+        case FPP_FNEG: /* negate */
+            break;
+        case FPP_FABS: /* absolute value */
+            break;
+        case FPP_FHWD: /* read high word */
+            break;
+        case FPP_FAS: /* add single */
+            break;
+        case FPP_FSS: /* subtract single */
+            break;
+        case FPP_FDS: /* divide single */
+            break;
+        case FPP_FMS: /* multiply single */
+            break;
+        case FPP_FSRS: /* store single */
+            break;
+        case FPP_FLDS: /* load single */
+            break;
+        case FPP_FATS: /* add TEMP single */
+            break;
+        case FPP_FSTS: /* subtract TEMP single */
+            break;
+        case FPP_FDTS: /* divide TEMP single */
+            break;
+        case FPP_FMTS: /* multiply TEMP single */
+            break;
+        }
+    return rval;
+}
+
+
+int32 fpp2(int32 pulse, int32 code, int32 AC)
+{
+    int32 rval, ir;
+
+    rval = 0;
+    ir = (code << 2) + pulse;
+    switch (ir) {
+        case FPP_FNRM: /* normalize */
+            break;
+        case FPP_FMTF: /* move TEMP to FPAC */
+            break;
+        case FPP_FMFT: /* move FPAC to TEMP */
+            break;
+        case FPP_FAD: /* add double */
+            break;
+        case FPP_FSD: /* subtract double */
+            break;
+        case FPP_FDD: /* divide double */
+            break;
+        case FPP_FMD: /* multiply double */
+            break;
+        case FPP_FSCL: /* scale */
+            break;
+        case FPP_FSRD: /* store double */
+            break;
+        case FPP_FLDX: /* load exponent */
+            break;
+        case FPP_FLDD: /* load double */
+            break;
+        case FPP_FATD: /* add TEMP double */
+            break;
+        case FPP_FSTD: /* subtract TEMP double */
+            break;
+        case FPP_FDTD: /* divide TEMP double */
+            break;
+        case FPP_FMTD: /* multiply TEMP double */
+            break;
+        }
+    return rval;
+}
+
+
+int32 fpp(int32 pulse, int32 code, int32 AC)
+{
+    int32 rval, ir;
+
+    rval = 0;
+    ir = (code << 2) + pulse;
+    switch (ir) {
+        case  FPP_FRST: /* read STATUS */
+            break;
+        case  FPP_FWST: /* write STATUS */
+            break;
+        }
+
     return rval;
 }
 
