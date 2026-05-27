@@ -87,9 +87,13 @@ static char* sta_bits[] = {
 static t_int64 FPAC, TEMP;
 static int16 FPSR;
 static int32 fpp_trace;
+static t_int64 tempfp;
 
 t_stat fpp_reset(DEVICE *dptr);
 int32 fpp(int32 pulse, int32 code, int32 AC);
+
+extern int32 GetMap(int32 addr);
+extern int32 PutMap(int32 addr, int32 data);
 
 
 DIB fpp_dib = { DEV_FPU, 0, 0, &fpp };
@@ -128,41 +132,145 @@ t_stat fpp_reset(DEVICE *dptr)
     return SCPE_OK;
 }
 
+static void GetMapS(int32 addr, t_int64 *data)
+{
+    *data  = ((t_uint64)GetMap(addr + 0) << 48)
+           | ((t_uint64)GetMap(addr + 1) << 32);
+}
+
+static void GetMapD(int32 addr, t_int64 *data)
+{
+    *data  = ((t_uint64)GetMap(addr + 0) << 48)
+           | ((t_uint64)GetMap(addr + 1) << 32)
+           | ((t_uint64)GetMap(addr + 2) << 16)
+           | ((t_uint64)GetMap(addr + 3));
+}
+
+static void PutMapS(int32 addr, t_int64 *data)
+{
+    PutMap(addr+0, (int32)(*data >> 48) & 0177777);
+    PutMap(addr+1, (int32)(*data >> 32) & 0177777);
+}
+
+static void PutMapD(int32 addr, t_int64 *data)
+{
+    PutMap(addr+0, (int32)(*data >> 48) & 0177777);
+    PutMap(addr+1, (int32)(*data >> 32) & 0177777);
+    PutMap(addr+2, (int32)(*data >> 16) & 0177777);
+    PutMap(addr+3, (int32)(*data >>  0) & 0177777);
+}
+
+static void SetFPSR(int k)
+{
+    switch (k) {
+        case DGF_OVF:
+            FPSR |= STA_OVF;
+            break;
+        case DGF_UNF:
+            FPSR |= STA_UNF;
+            break;
+        case DGF_DVZ:
+            FPSR |= STA_DVZ;
+            break;
+        }
+}
+
+#define FPP_SIGN    0x8000000000000000
+#define FPP_EXPO    0x7F00000000000000
+#define FPP_MANT    0x00FFFFFFFFFFFFFF
 
 int32 fpp1(int32 pulse, int32 code, int32 AC)
 {
     int32 rval, ir;
+    t_int64 tempfp;
+    SHORT_FLOAT sf1, sf2;
+    int k;
 
     rval = 0;
     ir = (code << 2) + pulse;
     switch (ir) {
         case FPP_FCLR: /* clear FPAC */
+            FPAC = 0;
             break;
         case FPP_FNEG: /* negate */
+            if (FPAC)
+                FPAC ^= FPP_SIGN;
             break;
         case FPP_FABS: /* absolute value */
+            FPAC &= ~FPP_SIGN;
             break;
         case FPP_FHWD: /* read high word */
+            rval = (int32)(FPAC >> 48) & 0177777;
             break;
         case FPP_FAS: /* add single */
-            break;
         case FPP_FSS: /* subtract single */
+            GetMapS(AC, &tempfp);
+            if (FPP_FSS == ir)
+                tempfp ^= FPP_SIGN;
+            get_sf(&sf1, &FPAC);
+            get_sf(&sf2, &tempfp);
+            k = add_sf(&sf1, &sf2, 1);
+            SetFPSR(k);
+            store_sf(&sf1, &FPAC);
             break;
         case FPP_FDS: /* divide single */
+            GetMapS(AC, &tempfp);
+            if (0 == (tempfp & FPP_MANT)) {
+                FPSR |= STA_DVZ;
+                }
+            else {
+                get_sf(&sf1, &FPAC);
+                get_sf(&sf2, &tempfp);
+                k = div_sf(&sf1, &sf2);
+                SetFPSR(k);
+                store_sf(&sf1, &FPAC);
+                }
             break;
         case FPP_FMS: /* multiply single */
+            GetMapS(AC, &tempfp);
+            get_sf(&sf1, &FPAC);
+            get_sf(&sf2, &tempfp);
+            k = mul_sf(&sf1, &sf2);
+            SetFPSR(k);
+            store_sf(&sf1, &FPAC);
             break;
         case FPP_FSRS: /* store single */
+            PutMapS(AC, &FPAC);
             break;
         case FPP_FLDS: /* load single */
+            GetMapS(AC, &FPAC);
             break;
         case FPP_FATS: /* add TEMP single */
-            break;
         case FPP_FSTS: /* subtract TEMP single */
+            tempfp = TEMP;
+            if (FPP_FSTS == ir)
+                tempfp ^= FPP_SIGN;
+            get_sf(&sf1, &FPAC);
+            get_sf(&sf2, &tempfp);
+            k = add_sf(&sf1, &sf2, 1);
+            SetFPSR(k);
+            store_sf(&sf1, &FPAC);
             break;
         case FPP_FDTS: /* divide TEMP single */
+            tempfp = TEMP;
+            if (0 == (tempfp & FPP_MANT)) {
+                FPSR |= STA_DVZ;
+                }
+            else {
+                get_sf(&sf1, &FPAC);
+                get_sf(&sf2, &tempfp);
+                k = div_sf(&sf1, &sf2);
+                SetFPSR(k);
+                store_sf(&sf1, &FPAC);
+                }
             break;
         case FPP_FMTS: /* multiply TEMP single */
+            tempfp = TEMP;
+            get_sf(&sf1, &FPAC);
+            get_sf(&sf2, &tempfp);
+            k = mul_sf(&sf1, &sf2);
+            SetFPSR(k);
+            store_sf(&sf1, &FPAC);
             break;
         }
     return rval;
@@ -172,39 +280,100 @@ int32 fpp1(int32 pulse, int32 code, int32 AC)
 int32 fpp2(int32 pulse, int32 code, int32 AC)
 {
     int32 rval, ir;
+    t_int64 tempfp;
+    LONG_FLOAT df1, df2;
+    int k;
 
     rval = 0;
     ir = (code << 2) + pulse;
     switch (ir) {
         case FPP_FNRM: /* normalize */
+            get_lf(&df1, &FPAC);
+            k = normal_lf(&df1);
+            SetFPSR(k);
+            store_lf(&df1, &FPAC);
             break;
         case FPP_FMTF: /* move TEMP to FPAC */
+            FPAC = TEMP;
             break;
         case FPP_FMFT: /* move FPAC to TEMP */
+            TEMP = FPAC;
             break;
         case FPP_FAD: /* add double */
-            break;
         case FPP_FSD: /* subtract double */
+            GetMapD(AC, &tempfp);
+            if (FPP_FSD == ir)
+                tempfp ^= FPP_SIGN;
+            get_lf(&df1, &FPAC);
+            get_lf(&df2, &tempfp);
+            k = add_lf(&df1, &df2, 1);
+            SetFPSR(k);
+            store_lf(&df1, &FPAC);
             break;
         case FPP_FDD: /* divide double */
+            GetMapD(AC, &tempfp);
+            if (0 == (tempfp & FPP_MANT)) {
+                FPSR |= STA_DVZ;
+                }
+            else {
+                get_lf(&df1, &FPAC);
+                get_lf(&df2, &tempfp);
+                k = div_lf(&df1, &df2);
+                SetFPSR(k);
+                store_lf(&df1, &FPAC);
+                }
             break;
         case FPP_FMD: /* multiply double */
+            GetMapD(AC, &tempfp);
+            get_lf(&df1, &FPAC);
+            get_lf(&df2, &tempfp);
+            k = mul_lf(&df1, &df2);
+            SetFPSR(k);
+            store_lf(&df1, &FPAC);
             break;
         case FPP_FSCL: /* scale */
             break;
         case FPP_FSRD: /* store double */
+            PutMapD(AC, &FPAC);
             break;
         case FPP_FLDX: /* load exponent */
+            FPAC &= ~FPP_EXPO;
+            FPAC |= (t_int64)(AC & 077400) << 56;
             break;
         case FPP_FLDD: /* load double */
+            GetMapD(AC, &FPAC);
             break;
         case FPP_FATD: /* add TEMP double */
-            break;
         case FPP_FSTD: /* subtract TEMP double */
+            tempfp = TEMP;
+            if (FPP_FSTD == ir)
+                tempfp ^= FPP_SIGN;
+            get_lf(&df1, &FPAC);
+            get_lf(&df2, &tempfp);
+            k = add_lf(&df1, &df2, 1);
+            SetFPSR(k);
+            store_lf(&df1, &FPAC);
             break;
         case FPP_FDTD: /* divide TEMP double */
+            tempfp = TEMP;
+            if (0 == (tempfp & FPP_MANT)) {
+                FPSR |= STA_DVZ;
+                }
+            else {
+                get_lf(&df1, &FPAC);
+                get_lf(&df2, &tempfp);
+                k = div_lf(&df1, &df2);
+                SetFPSR(k);
+                store_lf(&df1, &FPAC);
+                }
             break;
         case FPP_FMTD: /* multiply TEMP double */
+            tempfp = TEMP;
+            get_lf(&df1, &FPAC);
+            get_lf(&df2, &tempfp);
+            k = mul_lf(&df1, &df2);
+            SetFPSR(k);
+            store_lf(&df1, &FPAC);
             break;
         }
     return rval;

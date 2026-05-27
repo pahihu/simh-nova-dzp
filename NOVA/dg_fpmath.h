@@ -34,4 +34,9 @@ extern int mul_lf(LONG_FLOAT *fl, LONG_FLOAT *mul_fl);
 extern int div_sf(SHORT_FLOAT *fl, SHORT_FLOAT *div_fl);
 extern int div_lf(LONG_FLOAT *fl, LONG_FLOAT *div_fl);
 
+#define DGF_OK     0
+#define DGF_OVF    1
+#define DGF_UNF    2
+#define DGF_DVZ    3
+
 #endif
