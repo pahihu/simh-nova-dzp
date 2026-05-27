@@ -197,6 +197,9 @@
 #define DEV_MAP         003                             /* MMPU control */
 #else
 #define DEV_MMPU        002                             /* Nova 840 MMPU */
+#define DEV_FPU         076                             /* FP primary control */
+#define DEV_FPU1        074                             /* FP single precision */
+#define DEV_FPU2        075                             /* FP double precision */
 #endif
 #define DEV_TTI         010                             /* console input */
 #define DEV_TTO         011                             /* console output */

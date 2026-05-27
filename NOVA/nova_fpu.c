@@ -4,12 +4,6 @@
 #include "nova_defs.h"
 #include "dg_fpmath.h"
 
-#define UNIT_UP         (UNIT_V_UF)                     /* unit enabled */
-
-#define DEV_FPU         076                             /* FP primary control */
-#define DEV_FPU1        074                             /* FP single precision */
-#define DEV_FPU2        075                             /* FP double precision */
-
 #define IOP_S           0100
 #define IOP_C           0200
 #define IOP_P           0300
@@ -61,9 +55,6 @@
 #define FPP_FRST         (OP_DIA + IOP_C + DEV_FPU)      /* read STATUS */
 #define FPP_FWST         (OP_DOA +         DEV_FPU)      /* write STATUS */
 
-static t_int64 FPAC, TEMP;
-static int16 SR;
-
 #define STA_ANY     0100000
 #define STA_OVF     0040000
 #define STA_UNF     0020000
@@ -85,3 +76,60 @@ static char* sta_bits[] = {
     "DVZ", "UNF", "OVF",
     "ANY"
 };
+
+#define UNIT_V_UP       (UNIT_V_UF)                     /* FPU Enabled */
+#define UNIT_UP         (1 << UNIT_V_UP)
+
+static t_int64 FPAC, TEMP;
+static int16 FPSR;
+static int32 fpp_trace;
+
+t_stat fpp_reset(DEVICE *dptr);
+int32 fpp(int32 pulse, int32 code, int32 AC);
+
+
+DIB fpp_dib = { DEV_FPU, 0, 0, &fpp };
+
+UNIT fpp_unit = { UDATA (NULL, UNIT_UP, MAXMEMSIZE) };
+
+REG fpp_reg[] = {
+    { ORDATA (STATUS, FPSR, 16) },
+    { ORDATA (FPAC, FPAC, 64) },
+    { ORDATA (TEMP, TEMP, 64) },
+    { DRDATA (TRACE, fpp_trace,   32) },
+    { NULL }
+};
+
+MTAB fpp_mod[] = {
+    { UNIT_UP, UNIT_UP, "Enabled (UP)", "UP", NULL },
+    { UNIT_UP,       0, "Disabled (DOWN)", "DOWN", NULL },
+    { 0 }
+};
+
+
+DEVICE fpp_dev = {
+    "FPU", &fpp_unit, fpp_reg, fpp_mod,
+    1, 16, 17, 1, 16, 16,
+    NULL, NULL, &fpp_reset,
+    NULL, NULL, NULL,
+    &fpp_dib, DEV_DIS | DEV_DISABLE
+};
+
+
+t_stat fpp_reset(DEVICE *dptr)
+{
+    int i;
+
+    FPSR = 0;                   /* clear STATUS */
+    return SCPE_OK;
+}
+
+
+int32 fpp(int32 pulse, int32 code, int32 AC)
+{
+    int32 rval;
+
+    rval = 0;
+    return rval;
+}
+

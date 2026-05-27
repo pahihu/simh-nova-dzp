@@ -82,6 +82,7 @@ extern int32 MapStat;
 
 #else
 
+extern DEVICE fpp_dev;
 extern DEVICE mmpu_dev;
 
 #endif
@@ -113,6 +114,7 @@ DEVICE *sim_devices[] = {
     &fpu_dev,
     &pit_dev,
 #else
+    &fpp_dev,
     &mmpu_dev,
 #endif
     &ptr_dev,
@@ -623,7 +625,11 @@ static const char *device[] = {
 #endif
  "TTI", "TTO", "PTR", "PTP", "RTC", "PLT", "CDR", "LPT",
  "DSK", "MTA", "DCM", "DZP", "QTY" /* "ADCV" */, "DKP", "CAS",
- "TTI1", "TTO1", "CPU",
+ "TTI1", "TTO1",
+#if !defined (ECLIPSE)
+ "FPU",
+#endif
+ "CPU",
  NULL
  };
 
@@ -635,7 +641,11 @@ static const int32 dev_val[] = {
 #endif
  010, 011, 012, 013, 014, 015, 016, 017,
  020, 022, 024, 027, 030, 033, 034, 
- 050, 051, 077,
+ 050, 051,
+#if !defined (ECLIPSE)
+ 076,
+#endif
+ 077,
  -1
  };
 

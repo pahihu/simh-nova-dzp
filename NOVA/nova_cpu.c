@@ -275,8 +275,8 @@
 #define UNIT_NOVA4      (UNIT_MDV | UNIT_STK | UNIT_BYT)
 #define UNIT_KERONIX    (UNIT_MDV | UNIT_64KW)
 
-#define UNIT_V_17B      (UNIT_V_UF + 0)                 /* 17B MAP */
-#define UNIT_17B        (1 << UNIT_V_17B)
+#define UNIT_V_UP       (UNIT_V_UF + 0)                 /* MMPU enabled */
+#define UNIT_UP         (1 << UNIT_V_UP)
 
 #define MODE_64K        (cpu_unit.flags & UNIT_64KW)
 #define MODE_64K_ACTIVE ((cpu_unit.flags & UNIT_64KW) && (0xFFFF == AMASK))
@@ -530,11 +530,6 @@ t_stat mmpu_reset(DEVICE *dptr)
         }
     Map[USR_MAP][31] = 31;
     MapStatus = 0;              /* clear status */
-    return SCPE_OK;
-}
-
-t_stat mmpu_svc (UNIT *uptr)
-{
     return SCPE_OK;
 }
 
@@ -804,7 +799,7 @@ DEVICE cpu_dev = {
     
 DIB mmpu_dib = { DEV_MMPU, 0, 0, &mmpu };
     
-UNIT mmpu_unit = { UDATA (NULL, UNIT_17B, MAXMEMSIZE) };
+UNIT mmpu_unit = { UDATA (NULL, UNIT_UP, MAXMEMSIZE) };
 
 REG mmpu_reg[] = {
     { ORDATA (STATUS, MapStatus, 16) },
@@ -819,7 +814,8 @@ REG mmpu_reg[] = {
 };
 
 MTAB mmpu_mod[] = {
-    { UNIT_17B, UNIT_17B, "17bit", "17B", NULL },
+    { UNIT_UP, UNIT_UP, "Enabled (UP)", "UP", NULL },
+    { UNIT_UP,       0, "Disabled (DOWN)", "DOWN", NULL },
     { 0 }
 };
 
