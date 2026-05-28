@@ -744,3 +744,52 @@ int     i;
     return(0);
 
 }
+
+
+/*-------------------------------------------------------------------*/
+/* Scale long float                                                  */
+/*                                                                   */
+/* Input:                                                            */
+/*      fpr     Pointer to FPAC                                      */
+/*      AC      AC with exponent                                     */
+/* Value:                                                            */
+/*              exeption                                             */
+/*-------------------------------------------------------------------*/
+int scale_lf(t_int64 *fpr, int AC)
+{
+    int32 j, k, t;
+    t_int64 FPAC, tempfp, holdfp;
+    int pgm_check;
+
+    pgm_check = 0;
+    FPAC = *fpr;                                        /* load FPAC */
+
+    j = (AC >> 8) & 0x7F;                               /* expo of AC */
+    k = (int32)(FPAC >> 56) & 0x7F;                     /* expo of FPAC */
+    tempfp = FPAC & FPP_SIGN;                           /* save sign */
+    t = j - k;
+    if (t > 0) {                                        /* Positive shift */
+        FPAC &= FPP_MANT;
+        FPAC = FPAC >> (t * 4);
+        FPAC &= FPP_MANT;                               /* AC expo becomes expo */
+        holdfp = j;
+        FPAC |= (holdfp << 56);
+        }
+    if (t < 0) {                                        /* Negative shift */
+        FPAC &= FPP_MANT;
+        FPAC = FPAC << ((0-t) * 4);
+        pgm_check = 4;                                  /* MOF bit on */
+        FPAC &= FPP_MANT;                               /* AC expo becomes expo */
+        holdfp = j;
+        FPAC |= (holdfp << 56);
+        }
+    if ((FPAC & FPP_MANT) != 0)
+        FPAC |= tempfp;                                 /* restore sign */
+
+    if (0 == (FPAC & FPP_MANT))                         /* zero? */
+        FPAC = 0;                                       /* true zero */
+
+    *fpr = FPAC;                                        /* store FPAC */
+    return (pgm_check);
+}
+

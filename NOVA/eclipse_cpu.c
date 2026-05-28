@@ -4118,27 +4118,9 @@ if ((IR & 0100017) == 0100010) {                        /* This pattern for all 
         }
         i = (IR >> 11) & 3;
         FPSR &= 0xFCFFFFFF;                             /* Z+N bits off */
-        j = (AC[0] >> 8) & 0x7F;                        /* expo of AC0 */
-        k = (int32)(FPAC[i] >> 56) & 0x7F;              /* expo of FPAC */
-        tempfp = FPAC[i] & 0x8000000000000000;          /* save sign */
-        t = j - k;
-        if (t > 0) {                                    /* Positive shift */
-            FPAC[i] &= 0x00FFFFFFFFFFFFFF;
-            FPAC[i] = FPAC[i] >> (t * 4);
-            FPAC[i] &= 0x00FFFFFFFFFFFFFF;              /* AC0 expo becomes expo */
-            holdfp = j;
-            FPAC[i] |= (holdfp << 56);
-        }
-        if (t < 0) {                                    /* Negative shift */
-            FPAC[i] &= 0x00FFFFFFFFFFFFFF;
-            FPAC[i] = FPAC[i] << ((0-t) * 4);
+        k = scale_lf(&FPAC[i], AC[0]);
+        if (4 == k)
             FPSR |= 0x08000000;                         /* MOF bit on */
-            FPAC[i] &= 0x00FFFFFFFFFFFFFF;              /* AC0 expo becomes expo */
-            holdfp = j;
-            FPAC[i] |= (holdfp << 56);
-        }
-        if ((FPAC[i] & 0x00FFFFFFFFFFFFFF) != 0) 
-            FPAC[i] |= tempfp;                          /* restore sign */
         if ((FPAC[i] & 0x80FFFFFFFFFFFFFF) == 0) {
             FPAC[i] = 0;
             FPSR |= 0x02000000;                         /* Set Z */

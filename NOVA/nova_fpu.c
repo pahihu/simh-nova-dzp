@@ -64,6 +64,8 @@
 #define STA_UNF     0020000
 #define STA_DVZ     0010000
 #define STA_MOF     0004000
+#define STA_EFLGS   (STA_OVF + STA_UNF + STA_DVZ + STA_MOF)
+
 #define STA_GTZ     0002000
 #define STA_EQZ     0001000
 #define STA_LTZ     0000400
@@ -172,12 +174,10 @@ static void SetFPSR(int k)
         case DGF_DVZ:
             FPSR |= STA_DVZ;
             break;
+        case DGF_MOF:
+            FPSR |= STA_MOF;
         }
 }
-
-#define FPP_SIGN    0x8000000000000000
-#define FPP_EXPO    0x7F00000000000000
-#define FPP_MANT    0x00FFFFFFFFFFFFFF
 
 int32 fpp1(int32 pulse, int32 code, int32 AC)
 {
@@ -332,6 +332,8 @@ int32 fpp2(int32 pulse, int32 code, int32 AC)
             store_lf(&df1, &FPAC);
             break;
         case FPP_FSCL: /* scale */
+            k = scale_lf(&FPAC, AC);
+            SetFPSR(k);
             break;
         case FPP_FSRD: /* store double */
             PutMapD(AC, &FPAC);
@@ -387,9 +389,20 @@ int32 fpp(int32 pulse, int32 code, int32 AC)
     rval = 0;
     ir = (code << 2) + pulse;
     switch (ir) {
-        case  FPP_FRST: /* read STATUS */
+        case FPP_FRST: /* read STATUS */
+            rval = FPSR;
+            if (rval & STA_EFLGS)
+                rval |= STA_ANY;
+            if ((0 == (FPAC & FPP_SIGN)) && (FPAC & FPP_MANT))
+                rval |= STA_GTZ;
+            if ((0 == (FPAC & FPP_SIGN)) && (0 == (FPAC & FPP_MANT)))
+                rval |= STA_EQZ;
+            if (FPAC & FPP_SIGN)
+                rval |= STA_LTZ;
+            FPSR &= ~(STA_ANY + STA_EFLGS);
             break;
-        case  FPP_FWST: /* write STATUS */
+        case FPP_FWST: /* write STATUS */
+            FPSR = AC;
             break;
         }
 

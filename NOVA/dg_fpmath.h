@@ -3,6 +3,10 @@
 
 #include "nova_defs.h"
 
+#define FPP_SIGN    0x8000000000000000
+#define FPP_EXPO    0x7F00000000000000
+#define FPP_MANT    0x00FFFFFFFFFFFFFF
+
 typedef struct _SHORT_FLOAT {
         int32   short_fract;                            /* Fraction                  */
         short   expo;                                   /* Exponent + 64             */
@@ -19,6 +23,7 @@ extern void get_sf(SHORT_FLOAT *fl, t_int64 *fpr);
 extern void store_sf(SHORT_FLOAT *fl, t_int64 *fpr);
 extern void get_lf(LONG_FLOAT *fl, t_int64 *fpr);
 extern void store_lf(LONG_FLOAT *fl, t_int64 *fpr);
+extern int scale_lf(t_int64 *fpr, int32 AC);
 extern int normal_sf (SHORT_FLOAT *fl);
 extern int normal_lf (LONG_FLOAT *fl);
 extern int overflow_sf(SHORT_FLOAT *fl);
@@ -38,5 +43,6 @@ extern int div_lf(LONG_FLOAT *fl, LONG_FLOAT *div_fl);
 #define DGF_OVF    1
 #define DGF_UNF    2
 #define DGF_DVZ    3
+#define DGF_MOF    4
 
 #endif

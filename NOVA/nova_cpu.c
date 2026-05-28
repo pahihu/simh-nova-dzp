@@ -1665,6 +1665,16 @@ for (i = 0; (dptr = sim_devices[i]) != NULL; i++) {     /* loop thru dev */
         dev_table[dn].routine = dibp->routine;
         }
     }
+#if !defined(ECLIPSE)
+int32 fpp1(int32 pulse, int32 code, int32 AC);
+int32 fpp2(int32 pulse, int32 code, int32 AC);
+if (dev_table[DEV_FPU].routine) {                       /* if FPU present */
+    dev_table[DEV_FPU1] = dev_table[DEV_FPU];           /* patch FPU1     */
+    dev_table[DEV_FPU1].routine = fpp1;
+    dev_table[DEV_FPU2] = dev_table[DEV_FPU];           /*    and FPU2    */
+    dev_table[DEV_FPU2].routine = fpp2;
+    }
+#endif
 return SCPE_OK;
 }
 
