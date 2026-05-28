@@ -270,10 +270,11 @@ typedef struct {
 #define INT_V_TTO1      15                              /* second terminal */
 #define INT_V_QTY       16                              /* QTY multiplexor */
 #define INT_V_ALM       17                              /* ALM multiplexor */
-#define INT_V_STK       18                              /* stack overflow */
-#define INT_V_NO_ION_PENDING 19                         /* ion delay */
-#define INT_V_ION       20                              /* interrupts on */
-#define INT_V_TRAP      21                              /* trap instruction */
+#define INT_V_FPU       18                              /* FPU */
+#define INT_V_STK       19                              /* stack overflow */
+#define INT_V_NO_ION_PENDING 20                         /* ion delay */
+#define INT_V_ION       21                              /* interrupts on */
+#define INT_V_TRAP      22                              /* trap instruction */
 
 #define INT_PIT         (1 << INT_V_PIT)
 #define INT_DKP         (1 << INT_V_DKP)
@@ -291,6 +292,7 @@ typedef struct {
 #define INT_TTO1        (1 << INT_V_TTO1)
 #define INT_QTY         (1 << INT_V_QTY)
 #define INT_ALM         (1 << INT_V_ALM)
+#define INT_FPU         (1 << INT_V_FPU)
 #define INT_STK         (1 << INT_V_STK)
 #define INT_NO_ION_PENDING (1 << INT_V_NO_ION_PENDING)
 #define INT_ION         (1 << INT_V_ION)
@@ -300,6 +302,7 @@ typedef struct {
 
 /* PI disable bits */
 
+#define PI_FPU          0002000
 #define PI_PIT          0001000
 #define PI_DZP          0000400
 #define PI_DKP          0000400
