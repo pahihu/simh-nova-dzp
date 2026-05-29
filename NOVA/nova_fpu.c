@@ -88,7 +88,8 @@
 #define MODE_NORM   (0 == (FPSR & STA_MODE))
 #define MODE_PAR    (2 == (FPSR & STA_MODE))
 #define MODE_DIAG   (FPSR & STA_DMD)
-#define INTEN       (!MODE_DIAG && !(FPSR & STA_IND))
+#define INTDS       (FPSR & STA_IND)
+#define INTEN       (!MODE_DIAG && !INTDS)
 
 
 static char* sta_bits[] = {
@@ -112,6 +113,7 @@ static t_int64 tempfp;
 
 t_stat fpp_reset(DEVICE *dptr);
 int32 fpp(int32 pulse, int32 code, int32 AC);
+t_stat fpp_svc(UNIT *uptr);
 
 extern int32 GetMap(int32 addr);
 extern int32 PutMap(int32 addr, int32 data);
@@ -119,7 +121,7 @@ extern int32 PutMap(int32 addr, int32 data);
 
 DIB fpp_dib = { DEV_FPU, INT_FPU, PI_FPU, &fpp };
 
-UNIT fpp_unit = { UDATA (NULL, UNIT_UP, MAXMEMSIZE) };
+UNIT fpp_unit = { UDATA (&fpp_svc, UNIT_UP, MAXMEMSIZE) };
 
 REG fpp_reg[] = {
     { ORDATA (STATUS, FPSR, 16) },
@@ -186,34 +188,21 @@ static void SetFPSR(int k)
     switch (k) {
         case DGF_OVF:
             FPSR |= STA_OVF;
-            DEV_CLR_BUSY(INT_FPU);
-            if (INTEN) {
-                DEV_SET_DONE(INT_FPU);
-                DEV_UPDATE_INTR;
-                }
-            else {
+            if (INTDS) {
                 FPSR |= STA_ANY;
                 }
             break;
         case DGF_UNF:
             FPSR |= STA_UNF;
             DEV_CLR_BUSY(INT_FPU);
-            if (INTEN) {
-                DEV_SET_DONE(INT_FPU);
-                DEV_UPDATE_INTR;
-                }
-            else {
+            if (INTDS) {
                 FPSR |= STA_ANY;
                 }
             break;
         case DGF_DVZ:
             FPSR |= STA_DVZ;
             DEV_CLR_BUSY(INT_FPU);
-            if (INTEN) {
-                DEV_SET_DONE(INT_FPU);
-                DEV_UPDATE_INTR;
-                }
-            else {
+            if (INTDS) {
                 FPSR |= STA_ANY;
                 }
             break;
@@ -229,6 +218,7 @@ int32 fpp1(int32 pulse, int32 code, int32 AC)
     SHORT_FLOAT sf1, sf2;
     int k;
     int32 fwait;
+    UNIT *uptr;
 
     DEV_SET_BUSY(INT_FPU);                              /* set busy */
     if (INTEN) {                                        /* INT enabled? */
@@ -236,6 +226,7 @@ int32 fpp1(int32 pulse, int32 code, int32 AC)
         DEV_UPDATE_INTR;
         }
 
+    uptr = fpp_dev.units + 0;
     rval = 0;
     ir = (code << 2) + pulse;
     switch (ir) {
@@ -280,7 +271,7 @@ int32 fpp1(int32 pulse, int32 code, int32 AC)
             GetMapS(AC, &tempfp);
             if (0 == (tempfp & FPP_MANT)) {
                 fwait = 71;
-                FPSR |= STA_DVZ;
+                SetFPSR(DGF_DVZ);
                 }
             else {
                 fwait = 144;
@@ -326,7 +317,7 @@ int32 fpp1(int32 pulse, int32 code, int32 AC)
             tempfp = TEMP;
             if (0 == (tempfp & FPP_MANT)) {
                 fwait = 45;
-                FPSR |= STA_DVZ;
+                SetFPSR(DGF_DVZ);
                 }
             else {
                 fwait = 118;
@@ -348,13 +339,7 @@ int32 fpp1(int32 pulse, int32 code, int32 AC)
             break;
         }
 
-    if (0 == (FPSR & STA_IFLGS)) {                      /* no errors? */
-        DEV_CLR_BUSY(INT_FPU);                          /* clear busy */
-        if (INTEN) {                                    /* INT enabled? */
-            DEV_SET_DONE(INT_FPU);                      /* signal INT */
-            DEV_UPDATE_INTR;
-            }
-        }
+    sim_activate (uptr, fwait >> 3);
     return rval;
 }
 
@@ -366,6 +351,7 @@ int32 fpp2(int32 pulse, int32 code, int32 AC)
     LONG_FLOAT df1, df2;
     int k;
     int32 fwait;
+    UNIT *uptr;
 
     DEV_SET_BUSY(INT_FPU);                              /* set busy */
     if (INTEN) {                                        /* INT enabled? */
@@ -373,6 +359,7 @@ int32 fpp2(int32 pulse, int32 code, int32 AC)
         DEV_UPDATE_INTR;
         }
 
+    uptr = fpp_dev.units + 0;
     rval = 0;
     ir = (code << 2) + pulse;
     switch (ir) {
@@ -417,7 +404,7 @@ int32 fpp2(int32 pulse, int32 code, int32 AC)
             GetMapD(AC, &tempfp);
             if (0 == (tempfp & FPP_MANT)) {
                 fwait = 87;
-                FPSR |= STA_DVZ;
+                SetFPSR(DGF_DVZ);
                 }
             else {
                 fwait = 224;
@@ -473,7 +460,7 @@ int32 fpp2(int32 pulse, int32 code, int32 AC)
             tempfp = TEMP;
             if (0 == (tempfp & FPP_MANT)) {
                 fwait = 45;
-                FPSR |= STA_DVZ;
+                SetFPSR(DGF_DVZ);
                 }
             else {
                 fwait = 182;
@@ -495,13 +482,7 @@ int32 fpp2(int32 pulse, int32 code, int32 AC)
             break;
         }
 
-    if (0 == (FPSR & STA_IFLGS)) {                      /* no errors? */
-        DEV_CLR_BUSY(INT_FPU);                          /* clear busy */
-        if (INTEN) {                                    /* INT enabled? */
-            DEV_SET_DONE(INT_FPU);                      /* signal INT */
-            DEV_UPDATE_INTR;
-            }
-        }
+    sim_activate (uptr, fwait >> 3);
     return rval;
 }
 
@@ -510,6 +491,7 @@ int32 fpp(int32 pulse, int32 code, int32 AC)
 {
     int32 rval, ir;
     int32 fwait = 0;
+    UNIT *uptr;
 
     DEV_SET_BUSY(INT_FPU);                              /* set busy */
     if (INTEN) {                                        /* INT enabled? */
@@ -517,6 +499,7 @@ int32 fpp(int32 pulse, int32 code, int32 AC)
         DEV_UPDATE_INTR;
         }
 
+    uptr = fpp_dev.units + 0;
     rval = 0;
     ir = (code << 2) + pulse;
     switch (ir) {
@@ -542,13 +525,17 @@ int32 fpp(int32 pulse, int32 code, int32 AC)
             break;
         }
 
-    if (0 == (FPSR & STA_IFLGS)) {                      /* no errors? */
-        DEV_CLR_BUSY(INT_FPU);                          /* clear busy */
-        if (INTEN) {                                    /* INT enabled? */
-            DEV_SET_DONE(INT_FPU);                      /* signal INT */
-            DEV_UPDATE_INTR;
-            }
-        }
+    sim_activate (uptr, fwait >> 3);
     return rval;
+}
+
+t_stat fpp_svc(UNIT *uptr)
+{
+    DEV_CLR_BUSY(INT_FPU);
+    if (INTEN) {
+        DEV_SET_DONE(INT_FPU);
+        DEV_UPDATE_INTR;
+    }
+    return SCPE_OK;
 }
 
