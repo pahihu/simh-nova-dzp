@@ -1980,6 +1980,7 @@ struct Dbits
     { INT_ION,    0,    "ION"    },
     { INT_NO_ION_PENDING, 1, "IONPND"  },    /*  (invert this logic to provide cleaner display)  */
     { INT_STK,    0,    "STK"    },
+    { INT_FPU,    0,    "FPU"    },
     { INT_PIT,    0,    "PIT"    },
     { INT_DZP,    0,    "DZP"    },
     { INT_DKP,    0,    "DKP"    },

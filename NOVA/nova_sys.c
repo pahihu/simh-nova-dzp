@@ -398,6 +398,8 @@ static const char *opcode[] = {
  "PSHJ", "CLM", "SNB",
  "MSP", "XCT", "HLV",
  "IORI", "XORI", "ANDI", "ADDI",
+#else
+#include "nova_fpu_opcode.h"
 #endif
  "COM", "COMZ", "COMO", "COMC",
  "COML", "COMZL", "COMOL", "COMCL",
@@ -525,6 +527,8 @@ static const int32 opc_val[] = {
  0102270+I_LM,  0102370+I_2AC, 0102770+I_2AC,
  0103370+I_R, 0123370+I_R, 0143370+I_R,
  0103770+I_RLI, 0123770+I_RLI, 0143770+I_RLI, 0163770+I_RLI, 
+#else
+#include "nova_fpu_opcval.h"
 #endif
  0100000+I_RR, 0100020+I_RR, 0100040+I_RR, 0100060+I_RR,
  0100100+I_RR, 0100120+I_RR, 0100140+I_RR, 0100160+I_RR,

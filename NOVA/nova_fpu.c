@@ -8,64 +8,64 @@
 #define IOP_C           iopC
 #define IOP_P           iopP
 
-#define OP_NIO          (ioNIO << 2)
-#define OP_DIA          (ioDIA << 2)
-#define OP_DIB          (ioDIB << 2)
-#define OP_DOA          (ioDOA << 2)
-#define OP_DOB          (ioDOB << 2)
-#define OP_DOC          (ioDOC << 2)
+#define IO_NIO          (ioNIO << 2)
+#define IO_DIA          (ioDIA << 2)
+#define IO_DIB          (ioDIB << 2)
+#define IO_DOA          (ioDOA << 2)
+#define IO_DOB          (ioDOB << 2)
+#define IO_DOC          (ioDOC << 2)
 
 #define D_FPU           0
 #define D_FPU1          0
 #define D_FPU2          0
 
 /* memory reference instructions */
-#define FPP_FLDS        (OP_DOB + IOP_P + D_FPU1)       /* load single */
-#define FPP_FLDD        (OP_DOB + IOP_P + D_FPU2)       /* load double */
-#define FPP_FSRS        (OP_DOB + IOP_S + D_FPU1)       /* store single */
-#define FPP_FSRD        (OP_DOB + IOP_S + D_FPU2)       /* store double */
+#define FPP_FLDS        (IO_DOB + IOP_P + D_FPU1)       /* load single */
+#define FPP_FLDD        (IO_DOB + IOP_P + D_FPU2)       /* load double */
+#define FPP_FSRS        (IO_DOB + IOP_S + D_FPU1)       /* store single */
+#define FPP_FSRD        (IO_DOB + IOP_S + D_FPU2)       /* store double */
 
 /* arithmetic instructions */
-#define FPP_FAS         (OP_DOA +         D_FPU1)       /* add single */
-#define FPP_FAD         (OP_DOA +         D_FPU2)       /* add double */
-#define FPP_FSS         (OP_DOA + IOP_S + D_FPU1)       /* subtract single */
-#define FPP_FSD         (OP_DOA + IOP_S + D_FPU2)       /* subtract double */
-#define FPP_FMS         (OP_DOA + IOP_P + D_FPU1)       /* multiply single */
-#define FPP_FMD         (OP_DOA + IOP_P + D_FPU2)       /* multiply double */
-#define FPP_FDS         (OP_DOA + IOP_C + D_FPU1)       /* divide single */
-#define FPP_FDD         (OP_DOA + IOP_C + D_FPU2)       /* divide double */
+#define FPP_FAS         (IO_DOA +         D_FPU1)       /* add single */
+#define FPP_FAD         (IO_DOA +         D_FPU2)       /* add double */
+#define FPP_FSS         (IO_DOA + IOP_S + D_FPU1)       /* subtract single */
+#define FPP_FSD         (IO_DOA + IOP_S + D_FPU2)       /* subtract double */
+#define FPP_FMS         (IO_DOA + IOP_P + D_FPU1)       /* multiply single */
+#define FPP_FMD         (IO_DOA + IOP_P + D_FPU2)       /* multiply double */
+#define FPP_FDS         (IO_DOA + IOP_C + D_FPU1)       /* divide single */
+#define FPP_FDD         (IO_DOA + IOP_C + D_FPU2)       /* divide double */
 
 /* TEMP instructions */
-#define FPP_FMFT        (OP_NIO + IOP_P + D_FPU2)       /* move FPAC to TEMP */
-#define FPP_FMTF        (OP_NIO + IOP_C + D_FPU2)       /* move TEMP to FPAC */
-#define FPP_FATS        (OP_DOC +         D_FPU1)       /* add TEMP single */
-#define FPP_FATD        (OP_DOC +         D_FPU2)       /* add TEMP double */
-#define FPP_FSTS        (OP_DOC + IOP_S + D_FPU1)       /* subtract TEMP single */
-#define FPP_FSTD        (OP_DOC + IOP_S + D_FPU2)       /* subtract TEMP double */
-#define FPP_FMTS        (OP_DOC + IOP_P + D_FPU1)       /* multiply TEMP single */
-#define FPP_FMTD        (OP_DOC + IOP_P + D_FPU2)       /* multiply TEMP double */
-#define FPP_FDTS        (OP_DOC + IOP_C + D_FPU1)       /* divide TEMP single */
-#define FPP_FDTD        (OP_DOC + IOP_C + D_FPU2)       /* divide TEMP double */
+#define FPP_FMFT        (IO_NIO + IOP_P + D_FPU2)       /* move FPAC to TEMP */
+#define FPP_FMTF        (IO_NIO + IOP_C + D_FPU2)       /* move TEMP to FPAC */
+#define FPP_FATS        (IO_DOC +         D_FPU1)       /* add TEMP single */
+#define FPP_FATD        (IO_DOC +         D_FPU2)       /* add TEMP double */
+#define FPP_FSTS        (IO_DOC + IOP_S + D_FPU1)       /* subtract TEMP single */
+#define FPP_FSTD        (IO_DOC + IOP_S + D_FPU2)       /* subtract TEMP double */
+#define FPP_FMTS        (IO_DOC + IOP_P + D_FPU1)       /* multiply TEMP single */
+#define FPP_FMTD        (IO_DOC + IOP_P + D_FPU2)       /* multiply TEMP double */
+#define FPP_FDTS        (IO_DOC + IOP_C + D_FPU1)       /* divide TEMP single */
+#define FPP_FDTD        (IO_DOC + IOP_C + D_FPU2)       /* divide TEMP double */
 
 /* shift and logical instructions */
-#define FPP_FABS        (OP_NIO + IOP_P + D_FPU1)       /* absolute value */
-#define FPP_FCLR        (OP_NIO + IOP_S + D_FPU1)       /* clear FPAC */
-#define FPP_FLDX        (OP_DOB + IOP_C + D_FPU2)       /* load exponent */
-#define FPP_FNEG        (OP_NIO + IOP_C + D_FPU1)       /* negate */
-#define FPP_FNRM        (OP_NIO + IOP_S + D_FPU2)       /* normalize */
-#define FPP_FSCL        (OP_DOB +         D_FPU2)       /* scale */
-#define FPP_FHWD        (OP_DIA +         D_FPU1)       /* read high word */
+#define FPP_FABS        (IO_NIO + IOP_P + D_FPU1)       /* absolute value */
+#define FPP_FCLR        (IO_NIO + IOP_S + D_FPU1)       /* clear FPAC */
+#define FPP_FLDX        (IO_DOB + IOP_C + D_FPU2)       /* load exponent */
+#define FPP_FNEG        (IO_NIO + IOP_C + D_FPU1)       /* negate */
+#define FPP_FNRM        (IO_NIO + IOP_S + D_FPU2)       /* normalize */
+#define FPP_FSCL        (IO_DOB +         D_FPU2)       /* scale */
+#define FPP_FHWD        (IO_DIA +         D_FPU1)       /* read high word */
 
 /* status instructions */
-#define FPP_FRST        (OP_DIA + IOP_C + D_FPU)        /* read STATUS */
-#define FPP_FWST        (OP_DOA +         D_FPU)        /* write STATUS */
+#define FPP_FRST        (IO_DIA + IOP_C + D_FPU)        /* read STATUS */
+#define FPP_FWST        (IO_DOA +         D_FPU)        /* write STATUS */
 
 /* diagnostic instructions */
-#define FPP_RDW1        (OP_DIA +         D_FPU1)       /* read word 1 */
-#define FPP_RDW2        (OP_DIB +         D_FPU1)       /* read word 2 */
-#define FPP_RDW3        (OP_DIA +         D_FPU2)       /* read word 3 */
-#define FPP_RDW4        (OP_DIB +         D_FPU2)       /* read word 4 */
-#define FPP_FCLK        (OP_NIO + IOP_P + D_FPU)        /* FPU clock */
+#define FPP_RDW1        (IO_DIA +         D_FPU1)       /* read word 1 */
+#define FPP_RDW2        (IO_DIB +         D_FPU1)       /* read word 2 */
+#define FPP_RDW3        (IO_DIA +         D_FPU2)       /* read word 3 */
+#define FPP_RDW4        (IO_DIB +         D_FPU2)       /* read word 4 */
+#define FPP_FCLK        (IO_NIO + IOP_P + D_FPU)        /* FPU clock */
 
 
 #define STA_ANY     0100000
@@ -88,7 +88,7 @@
 #define MODE_NORM   (0 == (FPSR & STA_MODE))
 #define MODE_PAR    (2 == (FPSR & STA_MODE))
 #define MODE_DIAG   (FPSR & STA_DMD)
-#define INTEN       (0 == (FPSR & STA_IND))
+#define INTEN       (!MODE_DIAG && !(FPSR & STA_IND))
 
 
 static char* sta_bits[] = {
@@ -240,35 +240,35 @@ int32 fpp1(int32 pulse, int32 code, int32 AC)
     ir = (code << 2) + pulse;
     switch (ir) {
         case FPP_FCLR: /* clear FPAC */
-            fwait = 4;
+            fwait = 37;
             FPAC = 0;
             break;
         case FPP_FNEG: /* negate */
-            fwait = 4;
+            fwait = 37;
             if (FPAC)
                 FPAC ^= FPP_SIGN;
             break;
         case FPP_FABS: /* absolute value */
-            fwait = 4;
+            fwait = 37;
             FPAC &= ~FPP_SIGN;
             break;
         case FPP_FHWD: /* read high word, read word 1 */
-            fwait = 2;
+            fwait = 22;
             rval = (int32)(FPAC >> 48) & 0177777;
             break;
         case FPP_RDW2: /* read word 2 */
-            fwait = 2;
+            fwait = 22;
             rval = (int32)(FPAC >> 32) & 0177777;
             break;
         case FPP_FAS: /* add single */
         case FPP_FSS: /* subtract single */
             GetMapS(AC, &tempfp);
             if (FPP_FSS == ir) {
-                fwait = 9;
+                fwait = 88;
                 tempfp ^= FPP_SIGN;
                 }
             else {
-                fwait = 8;
+                fwait = 82;
                 }
             get_sf(&sf1, &FPAC);
             get_sf(&sf2, &tempfp);
@@ -279,11 +279,11 @@ int32 fpp1(int32 pulse, int32 code, int32 AC)
         case FPP_FDS: /* divide single */
             GetMapS(AC, &tempfp);
             if (0 == (tempfp & FPP_MANT)) {
-                fwait = 7;
+                fwait = 71;
                 FPSR |= STA_DVZ;
                 }
             else {
-                fwait = 14;
+                fwait = 144;
                 get_sf(&sf1, &FPAC);
                 get_sf(&sf2, &tempfp);
                 k = div_sf(&sf1, &sf2);
@@ -292,7 +292,7 @@ int32 fpp1(int32 pulse, int32 code, int32 AC)
                 }
             break;
         case FPP_FMS: /* multiply single */
-            fwait = 12;
+            fwait = 120;
             GetMapS(AC, &tempfp);
             get_sf(&sf1, &FPAC);
             get_sf(&sf2, &tempfp);
@@ -301,19 +301,21 @@ int32 fpp1(int32 pulse, int32 code, int32 AC)
             store_sf(&sf1, &FPAC);
             break;
         case FPP_FSRS: /* store single */
-            fwait = 5;
+            fwait = 54;
             PutMapS(AC, &FPAC);
             break;
         case FPP_FLDS: /* load single */
-            fwait = 6;
+            fwait = 63;
             GetMapS(AC, &FPAC);
             break;
         case FPP_FATS: /* add TEMP single */
         case FPP_FSTS: /* subtract TEMP single */
-            fwait = 6;
+            fwait = 56;
             tempfp = TEMP;
-            if (FPP_FSTS == ir)
+            if (FPP_FSTS == ir) {
+                fwait = 62;
                 tempfp ^= FPP_SIGN;
+                }
             get_sf(&sf1, &FPAC);
             get_sf(&sf2, &tempfp);
             k = add_sf(&sf1, &sf2, 1);
@@ -323,11 +325,11 @@ int32 fpp1(int32 pulse, int32 code, int32 AC)
         case FPP_FDTS: /* divide TEMP single */
             tempfp = TEMP;
             if (0 == (tempfp & FPP_MANT)) {
-                fwait = 5;
+                fwait = 45;
                 FPSR |= STA_DVZ;
                 }
             else {
-                fwait = 12;
+                fwait = 118;
                 get_sf(&sf1, &FPAC);
                 get_sf(&sf2, &tempfp);
                 k = div_sf(&sf1, &sf2);
@@ -336,7 +338,7 @@ int32 fpp1(int32 pulse, int32 code, int32 AC)
                 }
             break;
         case FPP_FMTS: /* multiply TEMP single */
-            fwait = 9;
+            fwait = 94;
             tempfp = TEMP;
             get_sf(&sf1, &FPAC);
             get_sf(&sf2, &tempfp);
@@ -375,34 +377,36 @@ int32 fpp2(int32 pulse, int32 code, int32 AC)
     ir = (code << 2) + pulse;
     switch (ir) {
         case FPP_RDW3: /* read word 3 */
-            fwait = 2;
+            fwait = 22;
             rval = (int32)(FPAC >> 16) & 0177777;
             break;
         case FPP_RDW4: /* read word 4 */
-            fwait = 2;
+            fwait = 22;
             rval = (int32)(FPAC & 0177777);
             break;
         case FPP_FNRM: /* normalize */
-            fwait = 4;
+            fwait = 38;
             get_lf(&df1, &FPAC);
             k = normal_lf(&df1);
             SetFPSR(k);
             store_lf(&df1, &FPAC);
             break;
         case FPP_FMTF: /* move TEMP to FPAC */
-            fwait = 4;
+            fwait = 37;
             FPAC = TEMP;
             break;
         case FPP_FMFT: /* move FPAC to TEMP */
-            fwait = 4;
+            fwait = 37;
             TEMP = FPAC;
             break;
         case FPP_FAD: /* add double */
         case FPP_FSD: /* subtract double */
-            fwait = 10;
+            fwait = 98;
             GetMapD(AC, &tempfp);
-            if (FPP_FSD == ir)
+            if (FPP_FSD == ir) {
+                fwait = 104;
                 tempfp ^= FPP_SIGN;
+                }
             get_lf(&df1, &FPAC);
             get_lf(&df2, &tempfp);
             k = add_lf(&df1, &df2, 1);
@@ -412,11 +416,11 @@ int32 fpp2(int32 pulse, int32 code, int32 AC)
         case FPP_FDD: /* divide double */
             GetMapD(AC, &tempfp);
             if (0 == (tempfp & FPP_MANT)) {
-                fwait = 9;
+                fwait = 87;
                 FPSR |= STA_DVZ;
                 }
             else {
-                fwait = 22;
+                fwait = 224;
                 get_lf(&df1, &FPAC);
                 get_lf(&df2, &tempfp);
                 k = div_lf(&df1, &df2);
@@ -425,7 +429,7 @@ int32 fpp2(int32 pulse, int32 code, int32 AC)
                 }
             break;
         case FPP_FMD: /* multiply double */
-            fwait = 20;
+            fwait = 200;
             GetMapD(AC, &tempfp);
             get_lf(&df1, &FPAC);
             get_lf(&df2, &tempfp);
@@ -434,29 +438,31 @@ int32 fpp2(int32 pulse, int32 code, int32 AC)
             store_lf(&df1, &FPAC);
             break;
         case FPP_FSCL: /* scale */
-            fwait = 3;
+            fwait = 32;
             k = scale_lf(&FPAC, AC);
             SetFPSR(k);
             break;
         case FPP_FSRD: /* store double */
-            fwait = 7;
+            fwait = 71;
             PutMapD(AC, &FPAC);
             break;
         case FPP_FLDX: /* load exponent */
-            fwait = 4;
+            fwait = 37;
             FPAC &= ~FPP_EXPO;
             FPAC |= (t_int64)(AC & 077400) << 56;
             break;
         case FPP_FLDD: /* load double */
-            fwait = 8;
+            fwait = 79;
             GetMapD(AC, &FPAC);
             break;
         case FPP_FATD: /* add TEMP double */
         case FPP_FSTD: /* subtract TEMP double */
-            fwait = 6;
+            fwait = 56;
             tempfp = TEMP;
-            if (FPP_FSTD == ir)
+            if (FPP_FSTD == ir) {
+                fwait = 62;
                 tempfp ^= FPP_SIGN;
+                }
             get_lf(&df1, &FPAC);
             get_lf(&df2, &tempfp);
             k = add_lf(&df1, &df2, 1);
@@ -466,11 +472,11 @@ int32 fpp2(int32 pulse, int32 code, int32 AC)
         case FPP_FDTD: /* divide TEMP double */
             tempfp = TEMP;
             if (0 == (tempfp & FPP_MANT)) {
-                fwait = 5;
+                fwait = 45;
                 FPSR |= STA_DVZ;
                 }
             else {
-                fwait = 18;
+                fwait = 182;
                 get_lf(&df1, &FPAC);
                 get_lf(&df2, &tempfp);
                 k = div_lf(&df1, &df2);
@@ -479,7 +485,7 @@ int32 fpp2(int32 pulse, int32 code, int32 AC)
                 }
             break;
         case FPP_FMTD: /* multiply TEMP double */
-            fwait = 16;
+            fwait = 158;
             tempfp = TEMP;
             get_lf(&df1, &FPAC);
             get_lf(&df2, &tempfp);
@@ -515,9 +521,10 @@ int32 fpp(int32 pulse, int32 code, int32 AC)
     ir = (code << 2) + pulse;
     switch (ir) {
         case FPP_FCLK: /* FPU clock */
+            fwait = 8;
             break;
         case FPP_FRST: /* read STATUS */
-            fwait = 3;
+            fwait = 28;
             rval = FPSR;
             if (rval & STA_EFLGS)
                 rval |= STA_ANY;
@@ -530,7 +537,7 @@ int32 fpp(int32 pulse, int32 code, int32 AC)
             FPSR &= ~(STA_ANY + STA_EFLGS);
             break;
         case FPP_FWST: /* write STATUS */
-            fwait = 3;
+            fwait = 28;
             FPSR = AC;
             break;
         }
