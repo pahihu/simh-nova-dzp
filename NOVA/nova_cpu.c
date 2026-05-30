@@ -502,14 +502,14 @@ int32 mmpu_trace = 0;
 
 extern void decode_bits(char *msg, int32 x, char** bits);
 
-void decode_ldpc(char *msg, int32 x)
+static void decode_ldpc(char *msg, int32 x)
 {
     if (MMPU_TRACE(2)) {
         decode_bits(msg, x, ldpc_bits);
         }
 }
 
-void decode_map_sta(char *msg, int32 x)
+static void decode_map_sta(char *msg, int32 x)
 {
     if (MMPU_TRACE(2)) {
         printf(" PAGE=%03o", x & MAP_M_PPAGE);
@@ -724,6 +724,9 @@ return SCPE_NXM;
    cpu_mod      CPU modifiers list
 */
 
+int32 cpu_trace = 0;
+#define CPU_TRACE(x)    (cpu_trace && (cpu_trace & (1 << (x))))
+
 UNIT cpu_unit = {
     UDATA (NULL, UNIT_FIX+UNIT_BINK+UNIT_MDV,  DFTMEMSIZE /* MAXMEMSIZE */ )
     };
@@ -754,6 +757,7 @@ REG cpu_reg[] = {
     { BRDATA (PCQ, pcq, 8, 16, PCQ_SIZE), REG_RO+REG_CIRC },
     { ORDATA (PCQP, pcq_p, 6), REG_HRO },
     { ORDATA (WRU, sim_int_char, 8) },
+    { DRDATA (TRACE, cpu_trace, 32) },
     { NULL }
     };
 
@@ -837,6 +841,8 @@ static jmp_buf MapTrap;
     if (MapSingleCycle) { MapInstrAddr = PPC; MapStatus |= MAP_STA_SIM; } \
     if (MODE_USR == MapMode) longjmp(MapTrap, pc); \
     }
+
+extern int32 fpp_busy;
 
 t_stat sim_instr (void)
 {
@@ -949,12 +955,18 @@ while (reason == 0) {                                   /* loop until halted */
         break;
         }
 
+    if (fpp_busy) { /* breakpoint? */
+        reason = STOP_IBKPT;                            /* stop simulation */
+        break;
+        }
+
     PPC = PC;                                           /* save instr. address */
     FetchCycle = 1; IR = GetMap(PC); FetchCycle = 0;    /* fetch instr */
     
     if ( hist_cnt )
         {
-        hist_save( MapLastPAddr, PC, IR ) ;             /*  PC, int_req unchanged */
+        int x = hist_save( MapLastPAddr, PC, IR ) ;     /*  PC, int_req unchanged */
+        if (CPU_TRACE(0)) hist_fprintf(stdout,1,&hist[x]);
         }
 
     INCREMENT_PC ;

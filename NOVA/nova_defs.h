@@ -190,7 +190,11 @@
 /* Device numbers */
 
 #define DEV_LOW         010                             /* lowest intr dev */
+#if defined(ECLIPSE)
 #define DEV_HIGH        051                             /* highest intr dev */
+#else
+#define DEV_HIGH        076                             /* highest intr dev */
+#endif
 #define DEV_MDV         001                             /* multiply/divide */
 #if defined(ECLIPSE)
 #define DEV_ECC         002                             /* ECC memory control */

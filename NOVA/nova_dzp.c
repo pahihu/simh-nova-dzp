@@ -352,28 +352,28 @@ void decode_bits(char *msg, int32 x, char** bits)
   printf("\r\n");
 }
 
-void decode_sta(char *msg, int32 x)
+static void decode_sta(char *msg, int32 x)
 {
   if (dzp_trace < 128)
     return;
   decode_bits(msg,x,sta_bits);
 }
 
-void decode_zsta(char *msg, int32 x)
+static void decode_zsta(char *msg, int32 x)
 {
   if (dzp_trace < 128)
     return;
   decode_bits(msg,x,zsta_bits);
 }
 
-void decode_zusta(char *msg, int32 x)
+static void decode_zusta(char *msg, int32 x)
 {
   if (dzp_trace < 128)
     return;  
   decode_bits(msg,x,zusta_bits);
 }
 
-void decode_uflags(char *msg, UNIT *uptr)
+static void decode_uflags(char *msg, UNIT *uptr)
 {
   if (dzp_trace < 128)
     return;
