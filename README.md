@@ -1,3 +1,28 @@
+I would like to say thanks for the generous help of Bruce Ray of Wild Hare Computer Systems Inc.
+
+
+Nova FPU in Fixnum days
+=======================
+
+I've added the Nova FPU to SimH using Dutch Owen's floating point routines found in the
+eclipse_cpu.c sources. The status settings and interrupt logic worked out using the DTOS 
+NFPU TEST, DTOS NMORT short and standalone NMORT long programs. It seems to pass the NMORTs.
+
+Milestones
+
+* FPU priority interrupt mask
+* difference between normal and parallel mode
+* when to set FPU SR flags
+* DTOS NFPU TEST uses not documented diagnostic instructions
+* FLDX bugfix (exponent placement)
+* mul_fl() bugfix (signed int32 to signed int64 conversion)
+
+Documentation
+
+* 015-000023-03 Programmer's Reference Manual NOVA LINE COMPUTERS, 1976\
+    *Floating point arithmetic pp.58*
+
+
 Mapped Nova 840 in 3 days
 =========================
 
