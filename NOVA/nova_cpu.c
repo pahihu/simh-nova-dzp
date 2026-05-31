@@ -842,7 +842,7 @@ static jmp_buf MapTrap;
     if (MODE_USR == MapMode) longjmp(MapTrap, pc); \
     }
 
-extern int32 fpp_busy;
+extern int32 fpp_break;
 
 t_stat sim_instr (void)
 {
@@ -955,7 +955,8 @@ while (reason == 0) {                                   /* loop until halted */
         break;
         }
 
-    if (fpp_busy) { /* breakpoint? */
+    if (fpp_break) {                                    /* FPU breakpoint? */
+        fpp_break = 0;
         reason = STOP_IBKPT;                            /* stop simulation */
         break;
         }

@@ -19,6 +19,8 @@ typedef struct _LONG_FLOAT {
         uint8   sign;                                   /* Sign                      */
 } LONG_FLOAT;
 
+extern void print_sf(SHORT_FLOAT *fl);
+extern void print_lf(LONG_FLOAT *fl);
 extern void get_sf(SHORT_FLOAT *fl, t_int64 *fpr);
 extern void store_sf(SHORT_FLOAT *fl, t_int64 *fpr);
 extern void get_lf(LONG_FLOAT *fl, t_int64 *fpr);

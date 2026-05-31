@@ -90,6 +90,7 @@
 #define STA_GTZ     0002000
 #define STA_EQZ     0001000
 #define STA_LTZ     0000400
+#define STA_ZFLGS   (STA_GTZ + STA_EQZ + STA_LTZ)       /* comparison flags */
 #define STA_RSVD    0000370
 #define STA_IND     0000004
 #define STA_PPM     0000002
@@ -121,15 +122,15 @@ static char* sta_bits[] = {
 #define UNIT_V_UP       (UNIT_V_UF + 0)                 /* FPU Enabled */
 #define UNIT_UP         (1 << UNIT_V_UP)
 #define FUNC            u3
-#define UNIT_V_BSY      (UNIT_V_UF + 1)
-#define UNIT_BSY        (1 << UNIT_V_BSY)
+#define UNIT_V_IREQ     (UNIT_V_UF + 1)
+#define UNIT_IREQ       (1 << UNIT_V_IREQ)
 
 extern int32 int_req, dev_busy, dev_done, dev_disable;
 
 static t_int64 FPAC, TEMP;
-static int16 FPSR;
+static int32 FPSR;
 static int32 fpp_trace;
-int32 fpp_busy;
+int32 fpp_break;
 static t_int64 tempfp;
 
 #define FPP_TRACE(x)    (fpp_trace && (fpp_trace & (1 << (x))))
@@ -187,7 +188,8 @@ t_stat fpp_reset(DEVICE *dptr)
     int i;
 
     FPSR = 0;                   /* clear STATUS */
-    fpp_busy = 0;               /* clear unit BUSY */
+    sim_cancel(&fpp_unit);
+    fpp_break = 0;
     return SCPE_OK;
 }
 
@@ -219,8 +221,11 @@ static void PutMapD(int32 addr, t_int64 *data)
     PutMap(addr+3, (int32)(*data >>  0) & 0177777);
 }
 
-static void SetFPSR(int k)
+static int32 SetFPSR(int k)
 {
+    int32 prevFPSR;
+
+    prevFPSR = FPSR;
     switch (k) {
         case DGF_OVF:
             FPSR |= STA_OVF;
@@ -245,6 +250,25 @@ static void SetFPSR(int k)
         case DGF_MOF:
             FPSR |= STA_MOF;
         }
+    return (prevFPSR ^ FPSR) & STA_IFLGS;
+}
+
+static void SetFPACEx(t_int64 val, int true0)
+{
+    if (true0 && !(val & FPP_MANT))
+        val = 0;
+    FPAC = val;
+    if ((0 == (FPAC & FPP_SIGN)) && (FPAC & FPP_MANT))
+        FPSR |= STA_GTZ;
+    if ((0 == (FPAC & FPP_SIGN)) && (0 == (FPAC & FPP_MANT)))
+        FPSR |= STA_EQZ;
+    if (FPAC & FPP_SIGN)
+        FPSR |= STA_LTZ;
+}
+
+static void SetFPAC(t_int64 val)
+{
+    SetFPACEx(val, 0);
 }
 
 int32 fpp1(int32 pulse, int32 code, int32 AC)
@@ -253,7 +277,7 @@ int32 fpp1(int32 pulse, int32 code, int32 AC)
     t_int64 tempfp;
     SHORT_FLOAT sf1, sf2;
     int k;
-    int32 fwait;
+    int32 fwait, intreq;
     UNIT *uptr;
     char trace_buf[128];
 
@@ -261,25 +285,25 @@ int32 fpp1(int32 pulse, int32 code, int32 AC)
         sprintf( trace_buf, "  [FPU1  %s%s %06o ", ff[code & 0x07], ss[pulse & 0x03], (AC & 0xFFFF) ) ;
         }
 
-    fwait = rval = 0;
+    intreq = fwait = rval = 0;
     uptr = fpp_dev.units + 0;
     fn = MKFN(pulse,code,D_FPU1);
     switch (fn) {
         case FPP_FCLR: /* clear FPAC */
             if (FPP_TRACE(1)) printf("FCLR");
             fwait = 37;
-            FPAC = 0;
+            SetFPAC(0);
             break;
         case FPP_FNEG: /* negate */
             if (FPP_TRACE(1)) printf("FNEG");
             fwait = 37;
             if (FPAC)
-                FPAC ^= FPP_SIGN;
+                SetFPAC(FPAC ^ FPP_SIGN);
             break;
         case FPP_FABS: /* absolute value */
             if (FPP_TRACE(1)) printf("FABS");
             fwait = 37;
-            FPAC &= ~FPP_SIGN;
+            SetFPAC(FPAC & ~FPP_SIGN);
             break;
         case FPP_FHWD: /* read high word, read word 1 */
             if (FPP_TRACE(1)) printf("FHWD");
@@ -305,23 +329,25 @@ int32 fpp1(int32 pulse, int32 code, int32 AC)
             get_sf(&sf1, &FPAC);
             get_sf(&sf2, &tempfp);
             k = add_sf(&sf1, &sf2, 1);
-            SetFPSR(k);
+            intreq = SetFPSR(k);
             store_sf(&sf1, &FPAC);
+            SetFPACEx(FPAC,1);
             break;
         case FPP_FDS: /* divide single */
             if (FPP_TRACE(1)) printf("FDS");
             GetMapS(AC, &tempfp);
             if (0 == (tempfp & FPP_MANT)) {
                 fwait = 71;
-                SetFPSR(DGF_DVZ);
+                intreq = SetFPSR(DGF_DVZ);
                 }
             else {
                 fwait = 144;
                 get_sf(&sf1, &FPAC);
                 get_sf(&sf2, &tempfp);
                 k = div_sf(&sf1, &sf2);
-                SetFPSR(k);
+                intreq = SetFPSR(k);
                 store_sf(&sf1, &FPAC);
+                SetFPAC(FPAC);
                 }
             break;
         case FPP_FMS: /* multiply single */
@@ -331,8 +357,9 @@ int32 fpp1(int32 pulse, int32 code, int32 AC)
             get_sf(&sf1, &FPAC);
             get_sf(&sf2, &tempfp);
             k = mul_sf(&sf1, &sf2);
-            SetFPSR(k);
+            intreq = SetFPSR(k);
             store_sf(&sf1, &FPAC);
+            SetFPAC(FPAC);
             break;
         case FPP_FSRS: /* store single */
             if (FPP_TRACE(1)) printf("FSRS");
@@ -356,23 +383,25 @@ int32 fpp1(int32 pulse, int32 code, int32 AC)
             get_sf(&sf1, &FPAC);
             get_sf(&sf2, &tempfp);
             k = add_sf(&sf1, &sf2, 1);
-            SetFPSR(k);
+            intreq = SetFPSR(k);
             store_sf(&sf1, &FPAC);
+            SetFPACEx(FPAC,1);
             break;
         case FPP_FDTS: /* divide TEMP single */
             if (FPP_TRACE(1)) printf("FDTS");
             tempfp = TEMP;
             if (0 == (tempfp & FPP_MANT)) {
                 fwait = 45;
-                SetFPSR(DGF_DVZ);
+                intreq = SetFPSR(DGF_DVZ);
                 }
             else {
                 fwait = 118;
                 get_sf(&sf1, &FPAC);
                 get_sf(&sf2, &tempfp);
                 k = div_sf(&sf1, &sf2);
-                SetFPSR(k);
+                intreq = SetFPSR(k);
                 store_sf(&sf1, &FPAC);
+                SetFPAC(FPAC);
                 }
             break;
         case FPP_FMTS: /* multiply TEMP single */
@@ -382,29 +411,26 @@ int32 fpp1(int32 pulse, int32 code, int32 AC)
             get_sf(&sf1, &FPAC);
             get_sf(&sf2, &tempfp);
             k = mul_sf(&sf1, &sf2);
-            SetFPSR(k);
+            intreq = SetFPSR(k);
             store_sf(&sf1, &FPAC);
+            SetFPAC(FPAC);
             break;
         }
 
-    if (fwait) {
+    if (MODE_PAR) {
         DEV_SET_BUSY(INT_FPU);                          /* set busy */
-        if (INTEN) {                                    /* INT enabled? */
-            DEV_CLR_DONE(INT_FPU);                      /* clear done */
+        uptr->FUNC = fn;
+        if (intreq) uptr->flags |= UNIT_IREQ;
+        sim_activate (uptr, fwait >> 3);
+        }
+    else if (MODE_NORM) {
+        if (intreq && INTEN) {                          /* INT req? */
+            DEV_CLR_DONE(INT_FPU);
+            DEV_UPDATE_INTR;
+
+            DEV_SET_DONE(INT_FPU);                      /* trigger INT */
             DEV_UPDATE_INTR;
             }
-
-        uptr->FUNC = fn;
-        if (uptr->flags & UNIT_BSY) {
-            printf("FPU1 busy!\r\n"); fpp_busy = 1;
-            }
-        else {
-            uptr->flags |= UNIT_BSY;
-            sim_activate (uptr, fwait >> 3);
-            }
-        }
-    else {
-        printf("FPU1 invalid op\r\n");
         }
 
     if (FPP_TRACE(0)) {
@@ -420,6 +446,9 @@ int32 fpp1(int32 pulse, int32 code, int32 AC)
                 printf( "]  \r\n" ) ;
                 }
         }
+    else if (FPP_TRACE(1)) {
+        printf( "\r\n" ) ;
+        }
 
     return rval;
 }
@@ -431,7 +460,7 @@ int32 fpp2(int32 pulse, int32 code, int32 AC)
     t_int64 tempfp;
     LONG_FLOAT df1, df2;
     int k;
-    int32 fwait;
+    int32 fwait, intreq;
     UNIT *uptr;
     char trace_buf[128];
 
@@ -439,7 +468,7 @@ int32 fpp2(int32 pulse, int32 code, int32 AC)
         sprintf( trace_buf, "  [FPU2  %s%s %06o ", ff[code & 0x07], ss[pulse & 0x03], (AC & 0xFFFF) ) ;
         }
 
-    fwait = rval = 0;
+    intreq = fwait = rval = 0;
     uptr = fpp_dev.units + 0;
     fn = MKFN(pulse,code,D_FPU2);
     switch (fn) {
@@ -458,13 +487,14 @@ int32 fpp2(int32 pulse, int32 code, int32 AC)
             fwait = 38;
             get_lf(&df1, &FPAC);
             k = normal_lf(&df1);
-            SetFPSR(k);
+            intreq = SetFPSR(k);
             store_lf(&df1, &FPAC);
+            SetFPAC(FPAC);
             break;
         case FPP_FMTF: /* move TEMP to FPAC */
             if (FPP_TRACE(1)) printf("FMTF");
             fwait = 37;
-            FPAC = TEMP;
+            SetFPAC(TEMP);  /* XXX */
             break;
         case FPP_FMFT: /* move FPAC to TEMP */
             if (FPP_TRACE(1)) printf("FMFT");
@@ -483,40 +513,49 @@ int32 fpp2(int32 pulse, int32 code, int32 AC)
             get_lf(&df1, &FPAC);
             get_lf(&df2, &tempfp);
             k = add_lf(&df1, &df2, 1);
-            SetFPSR(k);
+            intreq = SetFPSR(k);
             store_lf(&df1, &FPAC);
+            SetFPACEx(FPAC,1);
             break;
         case FPP_FDD: /* divide double */
             if (FPP_TRACE(1)) printf("FDD");
             GetMapD(AC, &tempfp);
             if (0 == (tempfp & FPP_MANT)) {
                 fwait = 87;
-                SetFPSR(DGF_DVZ);
+                intreq = SetFPSR(DGF_DVZ);
                 }
             else {
                 fwait = 224;
                 get_lf(&df1, &FPAC);
                 get_lf(&df2, &tempfp);
                 k = div_lf(&df1, &df2);
-                SetFPSR(k);
+                intreq = SetFPSR(k);
                 store_lf(&df1, &FPAC);
+                SetFPAC(FPAC);
                 }
             break;
         case FPP_FMD: /* multiply double */
             if (FPP_TRACE(1)) printf("FMD");
             fwait = 200;
             GetMapD(AC, &tempfp);
+            // printf(" FPAC=%016llX tempfp=%016llX ", FPAC, tempfp);
             get_lf(&df1, &FPAC);
             get_lf(&df2, &tempfp);
+            // print_lf(&df1);
+            // print_lf(&df2);
             k = mul_lf(&df1, &df2);
-            SetFPSR(k);
+            intreq = SetFPSR(k);
             store_lf(&df1, &FPAC);
+            // print_lf(&df1);
+            // printf(" FPAC=%016llX ", FPAC);
+            SetFPAC(FPAC);
             break;
         case FPP_FSCL: /* scale */
             if (FPP_TRACE(1)) printf("FSCL");
             fwait = 32;
             k = scale_lf(&FPAC, AC);
-            SetFPSR(k);
+            intreq = SetFPSR(k);
+            SetFPAC(FPAC);
             break;
         case FPP_FSRD: /* store double */
             if (FPP_TRACE(1)) printf("FSRD");
@@ -524,10 +563,10 @@ int32 fpp2(int32 pulse, int32 code, int32 AC)
             PutMapD(AC, &FPAC);
             break;
         case FPP_FLDX: /* load exponent */
-            if (FPP_TRACE(1)) printf("FLDX");
+            if (FPP_TRACE(1)) printf("FLDX %06o", AC);
             fwait = 37;
             FPAC &= ~FPP_EXPO;
-            FPAC |= (t_int64)(AC & 077400) << 56;
+            SetFPAC(FPAC | (t_int64)(AC & 077400) << 48);
             break;
         case FPP_FLDD: /* load double */
             if (FPP_TRACE(1)) printf("FLDD");
@@ -546,23 +585,25 @@ int32 fpp2(int32 pulse, int32 code, int32 AC)
             get_lf(&df1, &FPAC);
             get_lf(&df2, &tempfp);
             k = add_lf(&df1, &df2, 1);
-            SetFPSR(k);
+            intreq = SetFPSR(k);
             store_lf(&df1, &FPAC);
+            SetFPACEx(FPAC,1);
             break;
         case FPP_FDTD: /* divide TEMP double */
             if (FPP_TRACE(1)) printf("FDTD");
             tempfp = TEMP;
             if (0 == (tempfp & FPP_MANT)) {
                 fwait = 45;
-                SetFPSR(DGF_DVZ);
+                intreq = SetFPSR(DGF_DVZ);
                 }
             else {
                 fwait = 182;
                 get_lf(&df1, &FPAC);
                 get_lf(&df2, &tempfp);
                 k = div_lf(&df1, &df2);
-                SetFPSR(k);
+                intreq = SetFPSR(k);
                 store_lf(&df1, &FPAC);
+                SetFPAC(FPAC);
                 }
             break;
         case FPP_FMTD: /* multiply TEMP double */
@@ -572,29 +613,26 @@ int32 fpp2(int32 pulse, int32 code, int32 AC)
             get_lf(&df1, &FPAC);
             get_lf(&df2, &tempfp);
             k = mul_lf(&df1, &df2);
-            SetFPSR(k);
+            intreq = SetFPSR(k);
             store_lf(&df1, &FPAC);
+            SetFPAC(FPAC);
             break;
         }
 
-    if (fwait) {
+    if (MODE_PAR) {
         DEV_SET_BUSY(INT_FPU);                          /* set busy */
-        if (INTEN) {                                    /* INT enabled? */
-            DEV_CLR_DONE(INT_FPU);                      /* clear done */
+        uptr->FUNC = fn;
+        if (intreq) uptr->flags |= UNIT_IREQ;
+        sim_activate (uptr, fwait >> 3);
+        }
+    else if (MODE_NORM) {
+        if (intreq && INTEN) {                          /* INT req? */
+            DEV_CLR_DONE(INT_FPU);
+            DEV_UPDATE_INTR;
+
+            DEV_SET_DONE(INT_FPU);                      /* trigger INT */
             DEV_UPDATE_INTR;
             }
-
-        uptr->FUNC = fn;
-        if (uptr->flags & UNIT_BSY) {
-            printf("FPU2 busy!\r\n"); fpp_busy = 1;
-            }
-        else {
-            uptr->flags |= UNIT_BSY;
-            sim_activate (uptr, fwait >> 3);
-            }
-        }
-    else {
-        printf("FPU2 invalid op\r\n");
         }
 
     if (FPP_TRACE(0)) {
@@ -610,6 +648,10 @@ int32 fpp2(int32 pulse, int32 code, int32 AC)
                 printf( "]  \r\n" ) ;
                 }
         }
+    else if (FPP_TRACE(1)) {
+        printf( "\r\n" ) ;
+        }
+
     return rval;
 }
 
@@ -635,17 +677,12 @@ int32 fpp(int32 pulse, int32 code, int32 AC)
             break;
         case FPP_FRST: /* read STATUS */
             fwait = 28;
-            rval = FPSR;
-            if (rval & STA_EFLGS)
-                rval |= STA_ANY;
-            if ((0 == (FPAC & FPP_SIGN)) && (FPAC & FPP_MANT))
-                rval |= STA_GTZ;
-            if ((0 == (FPAC & FPP_SIGN)) && (0 == (FPAC & FPP_MANT)))
-                rval |= STA_EQZ;
-            if (FPAC & FPP_SIGN)
-                rval |= STA_LTZ;
+            if (FPP_TRACE(1)) printf("FRST FPSR=%06o ", FPSR);
+            if (FPSR & STA_EFLGS)
+                FPSR |= STA_ANY;
+            rval = FPSR & ~STA_RSVD;
             FPSR &= ~(STA_ANY + STA_EFLGS);
-            if (FPP_TRACE(1)) printf("FRST %06o", rval);
+            if (FPP_TRACE(1)) printf("%06o", rval);
             decode_sta("FRST", rval);
             break;
         case FPP_FWST: /* write STATUS */
@@ -655,27 +692,7 @@ int32 fpp(int32 pulse, int32 code, int32 AC)
             decode_sta("FWST", AC);
             break;
         }
-#if 0
-    if (fwait) {
-        DEV_SET_BUSY(INT_FPU);                          /* set busy */
-        if (INTEN) {                                    /* INT enabled? */
-            DEV_CLR_DONE(INT_FPU);                      /* clear done */
-            DEV_UPDATE_INTR;
-            }
 
-        uptr->FUNC = fn;
-        if (uptr->flags & UNIT_BSY) {
-            printf("FPU busy!\r\n"); fpp_busy = 1;
-            }
-        else {
-            uptr->flags |= UNIT_BSY;
-            sim_activate (uptr, fwait >> 3);
-            }
-        }
-    else {
-        printf("FPU invalid op\r\n");
-        }
-#endif
     if (FPP_TRACE(0)) {
         if ( code & 1 ) {
             if (rval & 0xFFFF) {
@@ -689,6 +706,10 @@ int32 fpp(int32 pulse, int32 code, int32 AC)
                 printf( "]  \r\n" ) ;
                 }
         }
+    else if (FPP_TRACE(1)) {
+        printf( "\r\n" ) ;
+        }
+
     return rval;
 }
 
@@ -707,12 +728,14 @@ t_stat fpp_svc(UNIT *uptr)
             );
         }
 
-    uptr->flags &= ~UNIT_BSY;
-
     DEV_CLR_BUSY(INT_FPU);
-    if (INTEN) {
+    if (INTEN && (uptr->flags & UNIT_IREQ)) {
+        DEV_CLR_DONE(INT_FPU);
+        DEV_UPDATE_INTR;
+
         DEV_SET_DONE(INT_FPU);
         DEV_UPDATE_INTR;
+        uptr->flags &= ~UNIT_IREQ;
         }
     return SCPE_OK;
 }

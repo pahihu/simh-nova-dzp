@@ -14,14 +14,19 @@ void get_sf (SHORT_FLOAT *fl, t_int64 *fpr)
     fl->short_fract = (int32)(*fpr >> 32) & 0x00FFFFFF;
 } 
 
+void print_sf (SHORT_FLOAT *fl)
+{
+    printf(" %d:%d:%08X",fl->sign,fl->expo, fl->short_fract);
+}
+
 /* Store short float to FPAC */
 
 void store_sf (SHORT_FLOAT *fl, t_int64 *fpr)
 {
     *fpr = 0;
     *fpr = ((t_int64)fl->sign << 63)
-         | ((t_int64)fl->expo << 56)
-         | ((t_int64)fl->short_fract <<32);
+         | ((t_int64)(fl->expo &0x7f) << 56)
+         | ((t_int64)(fl->short_fract & 0x00ffffff) <<32);
 } 
 
 /* Get long float from FPAC */
@@ -34,14 +39,19 @@ void get_lf (LONG_FLOAT *fl, t_int64 *fpr)
 
 } 
 
+void print_lf (LONG_FLOAT *fl)
+{
+    printf(" %d:%d:%016llX",fl->sign,fl->expo, fl->long_fract);
+}
+
 /* Store long float to FPAC */
 
 void store_lf (LONG_FLOAT *fl, t_int64 *fpr)
 {
     *fpr = 0;
     *fpr = (t_int64)fl->sign << 63;
-    *fpr |= ((t_int64)fl->expo << 56) & 0x7f00000000000000;
-    *fpr |= fl->long_fract;
+    *fpr |= (t_int64)(fl->expo & 0x7f) << 56;
+    *fpr |= fl->long_fract & 0x00FFFFFFFFFFFFFF;
 }
 
 
@@ -182,7 +192,6 @@ int over_under_flow_lf(LONG_FLOAT *fl)
         }
     }
     return(0);
-
 }
 
 int significance_sf (SHORT_FLOAT *fl)
@@ -602,11 +611,11 @@ int32     v;
         /* normalize result and compute expo */
         if (fl->long_fract & 0x0000F00000000000) {
             fl->long_fract = (fl->long_fract << 8)
-                           | (v >> 24);
+                           | ((uint32)v >> 24);
             fl->expo = fl->expo + mul_fl->expo - 64;
         } else {
             fl->long_fract = (fl->long_fract << 12)
-                           | (v >> 20);
+                           | ((uint32)v >> 20);
             fl->expo = fl->expo + mul_fl->expo - 65;
         }
 
