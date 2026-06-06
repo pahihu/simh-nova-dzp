@@ -301,9 +301,10 @@ struct drvtyp dzp_tab[] = {
     { 0 }
     };
 
-#define TRACEP(...)  if (dzp_trace > 127) {printf("%s: ", __func__); printf(__VA_ARGS__);}
 #define DZP_TRACE(x)    (dzp_trace & (1<<(x)))
 #define DZP_TRACE_FP    stderr
+#define dprintf(...)    fprintf(DZP_TRACE_FP,__VA_ARGS__)
+#define TRACEP(x,...)   if (DZP_TRACE(x)) {dprintf("%s: ", __func__); dprintf(__VA_ARGS__);}
 /*  current trace bit use (bit 0 = LSB)
      1 0   I/O instructions
      2 1   pre-seek/read/write event setup
@@ -344,12 +345,12 @@ void decode_bits(char *msg, int32 x, char** bits)
 {
   int i;
   
-  printf(" %s=",msg);
+  dprintf(" %s=",msg);
   for (i = 0; i < 16; i++) {
-    if (x & 1) printf("%s ",bits[i]);
+    if (x & 1) dprintf("%s ",bits[i]);
     x >>= 1;
   }
-  printf("\r\n");
+  dprintf("\r\n");
 }
 
 static void decode_sta(char *msg, int32 x)
@@ -377,7 +378,7 @@ static void decode_uflags(char *msg, UNIT *uptr)
 {
   if (dzp_trace < 128)
     return;
-  printf("CBSY=%d CDN=%d",DEV_IS_BUSY(INT_DZP),DEV_IS_DONE(INT_DZP));
+  dprintf("CBSY=%d CDN=%d",DEV_IS_BUSY(INT_DZP),DEV_IS_DONE(INT_DZP));
   decode_bits(msg,(uptr->flags) >> UNIT_V_UF,uflag_bits);
 }
 
@@ -605,10 +606,13 @@ switch (code) {                                         /* decode IR<5:7> */
             dzp_sta = dzp_sta | STA_ERR;
         rval = dzp_sta;
         if (FCCY_ZALT1 == GET_ZCMD(dzp_fccy)) {
+            TRACEP(0," RMA  ");
             rval = dzp_ma & 077777 ;                        /* return buf addr */
         } else if (FCCY_ZALT2 == GET_ZCMD(dzp_fccy)) {      /* ECC HI */
+            TRACEP(0," RECC1");
             rval = 0;
         } else {
+            TRACEP(0," RTXST");
             rval = 0;
             if (dzp_sta & STA_CNTFUL) rval |= ZSTA_CNTFUL;
             if (dzp_sta & STA_RWDONE)  rval |= ZSTA_RWDN;
@@ -630,6 +634,7 @@ switch (code) {                                         /* decode IR<5:7> */
         break;
 
     case ioDOA:                                         /* DOA */
+        TRACEP(0," SCMDR %06o",AC);
         if (AC & 0100000) {                             /* clear rw done? */
             dzp_sta = dzp_sta & ~(STA_CYL|STA_XCY|STA_UNS|STA_CRC|STA_RWDONE);
         }
@@ -637,7 +642,7 @@ switch (code) {                                         /* decode IR<5:7> */
             dzp_fccy = AC;                              /* save cmd, cyl */
             dzp_zunit = ((dzp_fccy >> USSC_V_ZUNIT) & USSC_M_ZUNIT);
             dzp_sta = dzp_sta & ~(AC & FCCY_FLAGS);     /* clear STA_DONE and STA_SKDNx */
-            TRACEP(" UNO=%01o ZCMD=%s CMD=%s ",dzp_zunit,dzp_cmds[GET_ZCMD(dzp_fccy)],fccy_cmds[GET_CMD(dzp_fccy,dtype)]);
+            TRACEP(7," UNO=%01o ZCMD=%s CMD=%s ",dzp_zunit,dzp_cmds[GET_ZCMD(dzp_fccy)],fccy_cmds[GET_CMD(dzp_fccy,dtype)]);
             }
         if (AC & 0100000) {
             DEV_CLR_DONE( INT_DZP );                    /* assume done flags 0 */
@@ -652,11 +657,14 @@ switch (code) {                                         /* decode IR<5:7> */
     case ioDIB:                                         /* DIB */
         rval = 0;
         if (FCCY_ZALT2 == GET_ZCMD(dzp_fccy)) {     /* ECC LO */
+            TRACEP(0," RECC2");
             rval = 0;
         } else if (FCCY_ZALT1 == GET_ZCMD(dzp_fccy)) {  /* read ext disk addr */
+            TRACEP(0," RSSCX");
             rval = dzp_ussc_ext;
         }
         else {
+            TRACEP(0," RDRST");
             decode_uflags("ioDIB",uptr);
             if (uptr->flags & UNIT_RDY)             /* update ready */
                 rval |= ZUSTA_RDY;
@@ -678,6 +686,7 @@ switch (code) {                                         /* decode IR<5:7> */
         break;
 
     case ioDOB:                                         /* DOB */
+        TRACEP(0," SMA   %06o",AC);
         if ((dev_busy & INT_DZP) == 0) {
             dzp_ma = AC & AMASK;                        /* old was AMASK? */
             if (AC & 0100000) {
@@ -690,6 +699,7 @@ switch (code) {                                         /* decode IR<5:7> */
         break;
 
     case ioDIC:                                         /* DIC */
+        TRACEP(0," RSSC ");
         rval = dzp_ussc;                                /* return unit, sect */
         break;
 
@@ -697,14 +707,16 @@ switch (code) {                                         /* decode IR<5:7> */
         if ((dev_busy & INT_DZP) == 0)                  /* if device is not busy */
         {
             if (FCCY_SEEK == GET_CMD(dzp_fccy, dtype)) {
-              dzp_zccy = AC;
-              TRACEP(" CYL=%04d ",GET_CYL(dzp_zccy,dtype));
-              break;
-            }
+                TRACEP(0," SCYL  %06o",AC);
+                dzp_zccy = AC;
+                TRACEP(7," CYL=%04d ",GET_CYL(dzp_zccy,dtype));
+                break;
+                }
             else {
-              dzp_ussc_ext = dzp_ussc; dzp_ussc = AC;
-            }
-            TRACEP(" SURF=%02d SECT=%02d CNT=%02d ",GET_SURF(dzp_ussc,dtype),GET_SECT(dzp_ussc,dtype),GET_COUNT(dzp_ussc,dtype));
+                TRACEP(0," SSSC  %06o",AC);
+                dzp_ussc_ext = dzp_ussc; dzp_ussc = AC;
+                }
+            TRACEP(7," SURF=%02d SECT=%02d CNT=%02d ",GET_SURF(dzp_ussc,dtype),GET_SECT(dzp_ussc,dtype),GET_COUNT(dzp_ussc,dtype));
         }
 #ifdef OBSOLETE
         if (((dtype == TYPE_6099) ||                    /* (BKR: don't forget 6097) */
@@ -723,16 +735,12 @@ dtype = GET_DTYPE (uptr->flags);                        /* get drive type */
 
 if ( DZP_TRACE(0) )
     {
-    if ( code & 1 ) {
-        if (rval & 0xFFFF) {
-            printf("%s", trace_buf);
-            printf( "  [%06o]  ", (rval & 0xFFFF) ) ;
-            printf( "]  \r\n" ) ;
+        dprintf( "%s", trace_buf ) ;
+        if ( code & 1 ) {
+            /* if (rval & 0xFFFF) */
+                dprintf( "  [%06o]  ", (rval & 0xFFFF) ) ;
             }
-        } else {
-            printf("%s", trace_buf);
-            printf( "]  \r\n" ) ;
-            }
+        dprintf( "]  \r\n" ) ;
     }
 
 cmd = GET_CMD(dzp_fccy, dtype);
@@ -836,20 +844,20 @@ UNIT *uptr;
 int32 oldCyl, u, dtype, t;
 float fact;
 
-TRACEP("pulse=%d\r\n",pulse);
+TRACEP(7,"pulse=%d\r\n",pulse);
 
 dzp_sta = dzp_sta & ~STA_EFLGS;                         /* clear errors */
 u = GET_UNIT (dzp_ussc);                                /* get unit number */
 uptr = dzp_dev.units + u;                               /* get unit */
 decode_uflags("DZP_GO",uptr);
 if (((uptr->flags & UNIT_ATT) == 0) || sim_is_active (uptr)) {
-    TRACEP("attached or busy\r\n");
+    TRACEP(7,"attached or busy\r\n");
     dzp_sta = dzp_sta | STA_ERR;                        /* attached or busy? */
     return FALSE;
     }
 
 if (dzp_diagmode) {                                     /* diagnostic mode? */
-    TRACEP("diagmode\r\n");
+    TRACEP(7,"diagmode\r\n");
     dzp_sta = (dzp_sta | STA_DONE);                     /* Set error bit only */
     DEV_CLR_BUSY( INT_DZP ) ;                           /* clear busy  */
     DEV_SET_DONE( INT_DZP ) ;                           /* set   done  */
@@ -884,29 +892,28 @@ if ( DZP_TRACE(1) )
     xCyl  = GET_CYL (dzp_fccy, dtype) ;
     xCnt  = 64 - (GET_COUNT(dzp_ussc, dtype)) ;
 
-    fprintf( DZP_TRACE_FP,
-        "  [%s:%c  %-5s:  %3d / %2d / %2d   %2d   %06o ] \r\n",
-        "DZP",
-        (char) (u + '0'),
-        ((uptr->FUNC == FCCY_READ) ?
-              "read"
-            : ((uptr->FUNC == FCCY_WRITE) ?
-                  "write"
-                : ((uptr->FUNC == FCCY_SEEK) ?
-                      "seek"
-                    : ((uptr->FUNC == FCCY_RECAL) ?
-                      "recal"
-                      : "other"
+    dprintf("  [%s:%c  %-5s:  %3d / %2d / %2d   %2d   %06o ] \r\n",
+            "DZP",
+            (char) (u + '0'),
+            ((uptr->FUNC == FCCY_READ) ?
+                  "read"
+                : ((uptr->FUNC == FCCY_WRITE) ?
+                      "write"
+                    : ((uptr->FUNC == FCCY_SEEK) ?
+                          "seek"
+                        : ((uptr->FUNC == FCCY_RECAL) ?
+                          "recal"
+                          : "other"
+                          )
                       )
                   )
-              )
-        ),
-        (unsigned) xCyl,
-        (unsigned) xSurf,
-        (unsigned) xSect,
-        (unsigned) xCnt,
-        (unsigned) (dzp_ma & 0xFFFF) /* show all 16-bits in case DCH B */
-        ) ;
+            ),
+            (unsigned) xCyl,
+            (unsigned) xSurf,
+            (unsigned) xSect,
+            (unsigned) xCnt,
+            (unsigned) (dzp_ma & 0xFFFF) /* show all 16-bits in case DCH B */
+            ) ;
     }
 
 
@@ -916,29 +923,29 @@ switch (uptr->FUNC) {                                   /* decode command */
     if (((uptr->flags & UNIT_ATT) == 0) ||              /* not attached? */
         ((uptr->flags & UNIT_WPRT) && (uptr->FUNC == FCCY_WRITE)))
             {
-            TRACEP("not attached\r\n");
+            TRACEP(7,"not attached\r\n");
             dzp_sta = dzp_sta | STA_DONE | STA_ERR;        /* error */
             }
     else if ( uptr->CYL  >= dzp_tab[dtype].cyl )        /* bad cylinder */
         {
-        TRACEP("bad cylinder\r\n");
+        TRACEP(7,"bad cylinder\r\n");
         dzp_sta = dzp_sta | STA_DONE | STA_ERR | STA_CYL ;
         }
     else if ( GET_SURF(dzp_ussc, dtype) >= dzp_tab[dtype].surf ) /* bad surface */
         {
-        TRACEP("bad surface\r\n");
+        TRACEP(7,"bad surface\r\n");
         dzp_sta = dzp_sta | STA_DONE | STA_ERR | STA_UNS;   /* older drives may not even do this... */
         /*    dzp_sta = dzp_sta | STA_DONE | STA_ERR | STA_XCY ;  /-  newer disks give this error  */
         }
     else if ( GET_SECT(dzp_ussc, dtype) >= dzp_tab[dtype].sect ) /* or bad sector? */
         {
-        TRACEP("bad sector\r\n");
+        TRACEP(7,"bad sector\r\n");
     /*  dzp_sta = dzp_sta | STA_DONE | STA_ERR | STA_UNS;   /- older drives may not even do this... */
         dzp_sta = dzp_sta | STA_DONE | STA_ERR | STA_XCY ;  /*  newer disks give this error  */
         }
     if ( (pulse != iopS) || (dzp_sta & STA_ERR) )
         {
-        TRACEP("not S or has err\r\n");
+        TRACEP(7,"not S or has err\r\n");
         return ( FALSE ) ;
         }
         if (uptr->flags & UNIT_BSY) {
@@ -956,17 +963,17 @@ switch (uptr->FUNC) {                                   /* decode command */
     case FCCY_SEEK:                                     /* seek */
         if ( ! (uptr->flags & UNIT_ATT) )               /* not attached? */
             {
-            TRACEP("seek: not attached\r\n");
+            TRACEP(7,"seek: not attached\r\n");
             dzp_sta = dzp_sta | STA_DONE | STA_ERR;     /* error */
             }
         else if ( uptr->CYL >= dzp_tab[dtype].cyl )     /* bad cylinder? */
             {
-            TRACEP("seek: bad cylinder\r\n");
+            TRACEP(7,"seek: bad cylinder\r\n");
             dzp_sta = dzp_sta | STA_ERR | STA_CYL;
             }
         if ( (pulse != iopP) || (dzp_sta & STA_ERR) )
             {
-            TRACEP("seek: not P or has err\r\n");
+            TRACEP(7,"seek: not P or has err\r\n");
             return ( FALSE ) ;                          /* only 'P' pulse start seeks!  */
             }
 
@@ -1031,16 +1038,12 @@ if (uptr->FUNC == FCCY_SEEK || uptr->FUNC == FCCY_RECAL) {                      
     dzp_sta &= ~STA_CNTFUL;
     uptr->flags &= ~UNIT_BSY;                           /* clear busy */
     uptr->flags |= UNIT_RDY;
-    if ( DZP_TRACE(2) )
-        {
-        fprintf( DZP_TRACE_FP,
-            "  [%s:%c  post %s : %4d ] \r\n",
+    TRACEP(2,"  [%s:%c  post %s : %4d ] \r\n",
             "DZP",
             (char) (u + '0'),
             (uptr->FUNC == FCCY_SEEK) ? "seek" : "recal",
             (unsigned) (uptr->CYL)
             ) ;
-        }
     return SCPE_OK;
     }
 
@@ -1073,10 +1076,7 @@ else if ( GET_SECT(dzp_ussc, dtype) >= dzp_tab[dtype].sect )   /* or bad sector?
 else {
 err = 0 ;
 do  {
-    if ( DZP_TRACE(3) )
-        {
-        fprintf( DZP_TRACE_FP,
-            "  [%s:%c  %-5s:  %3d / %2d / %2d   %06o @ %2d] \r\n",
+    TRACEP(3,"  [%s:%c  %-5s:  %3d / %2d / %2d   %06o @ %2d] \r\n",
             "DZP",
             (char) (u + '0'),
             ((uptr->FUNC == FCCY_READ) ?
@@ -1090,9 +1090,7 @@ do  {
             (unsigned) (GET_SECT(dzp_ussc, dtype)),
             (unsigned) (dzp_ma & 0xFFFF),
             (unsigned) (GET_COUNT(dzp_ussc, dtype)) /* show all 16-bits in case DCH B */
-            ) ;
-        }
-
+            );
 
     if ( GET_SECT(dzp_ussc, dtype) >= dzp_tab[dtype].sect )   /* or bad sector? */
         {
@@ -1166,19 +1164,15 @@ DZP_UPDATE_USSC( dtype, 1, newsurf, newsect );
         DZP_UPDATE_USSC( dtype, 0, newsurf, 0 );
         }
 
-    if ( DZP_TRACE(4) )
-           {
-           fprintf( DZP_TRACE_FP,
-                   "  [%s:%c  post %-5s:  %3d / %2d / %2d   %06o ] \r\n",
-                   "DZP",
-                    (char) (u + '0'),
-                    (FCCY_READ == uptr->FUNC) ? "read" : "write",
-                    (unsigned) (uptr->CYL),
-                    (unsigned) (GET_SURF(dzp_ussc, dtype)),
-                    (unsigned) (GET_SECT(dzp_ussc, dtype)),
-                    (unsigned) (dzp_ma & 0xFFFF) /* show all 16-bits in case DCH B */
-                    ) ;
-            }
+    TRACEP(4,"  [%s:%c  post %-5s:  %3d / %2d / %2d   %06o ] \r\n",
+            "DZP",
+            (char) (u + '0'),
+            (FCCY_READ == uptr->FUNC) ? "read" : "write",
+            (unsigned) (uptr->CYL),
+            (unsigned) (GET_SURF(dzp_ussc, dtype)),
+            (unsigned) (GET_SECT(dzp_ussc, dtype)),
+            (unsigned) (dzp_ma & 0xFFFF) /* show all 16-bits in case DCH B */
+            ) ;
     }
 
 DEV_CLR_BUSY( INT_DZP ) ;
