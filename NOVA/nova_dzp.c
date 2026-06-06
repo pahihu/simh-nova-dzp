@@ -205,6 +205,7 @@ static char* sta_bits[] = {
 #define ZSTA_RWTIM      0000004
 #define ZSTA_DATLAT     0000002     /* STA_DLT */
 #define ZSTA_RWFLT      0000001     /* STA_ERR */
+#define ZSTA_EFLGS      (ZSTA_DATLAT | ZSTA_RWTIM | ZSTA_VFY | ZSTA_SECSRF | ZSTA_CYLADD | ZSTA_BADSEC | ZSTA_ECC | ZSTA_SECADD | ZSTA_PAR)
 
 static char* zsta_bits[] = {
   "RWFLT","DATLAT","RWTIM","VFY",
@@ -623,9 +624,9 @@ switch (code) {                                         /* decode IR<5:7> */
             if (dzp_sta & STA_SKDN3) rval |= ZSTA_SKDN3;
             if (dzp_sta & STA_CRC)   rval |= ZSTA_PAR;
             if (dzp_sta & (STA_XCY | STA_UNS)) rval |= ZSTA_SECADD;
-            if (dzp_sta & STA_CYL)   rval |= ZSTA_CYLADD;
+            // if (dzp_sta & STA_CYL)   rval |= ZSTA_CYLADD;
             if (dzp_sta & STA_DLT)   rval |= ZSTA_DATLAT;
-            if (dzp_sta & STA_ERR)   rval |= ZSTA_RWFLT;
+            if (rval & ZSTA_EFLGS)   rval |= ZSTA_RWFLT;
             if (rval) {
               decode_sta("STAT",dzp_sta);
               decode_zsta("TXSTAT",rval);
@@ -666,9 +667,9 @@ switch (code) {                                         /* decode IR<5:7> */
         else {
             TRACEP(0," RDRST");
             decode_uflags("ioDIB",uptr);
-            if (uptr->flags & UNIT_RDY)             /* update ready */
+            if ((uptr->flags & UNIT_ATT) && (uptr->flags & UNIT_RDY)) /* update ready */
                 rval |= ZUSTA_RDY;
-            if (uptr->flags & UNIT_BSY)
+            if ((uptr->flags & UNIT_BSY) || !(uptr->flags & UNIT_ATT))
                 rval |= ZUSTA_BSY;
             if (uptr->flags & UNIT_WPRT)
                 rval |= ZUSTA_WRDIS;
