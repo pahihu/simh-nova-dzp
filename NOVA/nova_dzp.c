@@ -573,12 +573,16 @@ DEVICE dzp_dev = {
 
 /* IOT routine */
 
+#define MKCP(code,pulse)    (((code) << 2) | (pulse))
+#define CP_DOC              MKCP(ioDOC,0)
+
 int32 dzp (int32 pulse, int32 code, int32 AC)
 {
 UNIT *uptr;
 int32 u, rval, dtype;
 char trace_buf[256];
 int32 cmd;
+static int32 prevCP = 0;
 
 rval = 0;
 uptr = dzp_dev.units + GET_UNIT (dzp_ussc);             /* select unit */
@@ -624,7 +628,6 @@ switch (code) {                                         /* decode IR<5:7> */
             if (dzp_sta & STA_SKDN3) rval |= ZSTA_SKDN3;
             if (dzp_sta & STA_CRC)   rval |= ZSTA_PAR;
             if (dzp_sta & (STA_XCY | STA_UNS)) rval |= ZSTA_SECADD;
-            // if (dzp_sta & STA_CYL)   rval |= ZSTA_CYLADD;
             if (dzp_sta & STA_DLT)   rval |= ZSTA_DATLAT;
             if (rval & ZSTA_EFLGS)   rval |= ZSTA_RWFLT;
             if (rval) {
@@ -647,10 +650,6 @@ switch (code) {                                         /* decode IR<5:7> */
             }
         if (AC & 0100000) {
             DEV_CLR_DONE( INT_DZP );                    /* assume done flags 0 */
-#if 0
-            if (!DEV_IS_BUSY( INT_DZP) && (dzp_sta & STA_DFLGS))/* done flags = 0? */
-                DEV_SET_DONE( INT_DZP )    ;            /* nope - set done  */
-#endif
             DEV_UPDATE_INTR;                            /* update intr  */
         }        
         break;
@@ -715,7 +714,10 @@ switch (code) {                                         /* decode IR<5:7> */
                 }
             else {
                 TRACEP(0," SSSC  %06o",AC);
-                dzp_ussc_ext = dzp_ussc; dzp_ussc = AC;
+                if (CP_DOC == prevCP) {                 /* double DOC addressing */
+                    dzp_ussc_ext = dzp_ussc;
+                }
+                dzp_ussc = AC;
                 }
             TRACEP(7," SURF=%02d SECT=%02d CNT=%02d ",GET_SURF(dzp_ussc,dtype),GET_SECT(dzp_ussc,dtype),GET_COUNT(dzp_ussc,dtype));
         }
@@ -792,16 +794,6 @@ switch (pulse) {                                        /* decode IR<8:9> */
             }
         else
             {
-#if 0
-            if (FCCY_SEEK == cmd) {
-                // DEV_SET_BUSY( INT_DZP )
-                ;
-            } else
-            {
-                DEV_CLR_DONE( INT_DZP ) ;                   /*  clear done  */
-            }            
-            DEV_UPDATE_INTR ;
-#endif
             dzp_sta |= STA_CNTFUL;
 
             /*  DG "undocumented feature": 'P' pulse can not start a read/write operation!
@@ -814,16 +806,6 @@ switch (pulse) {                                        /* decode IR<8:9> */
             if (dzp_go(pulse)) {
                 break;                              /* no error - do not set done and status  */
             }
-#if 0
-            if (FCCY_SEEK == cmd) {
-                // DEV_CLR_BUSY( INT_DZP )
-                ;
-            } else
-            {
-                DEV_SET_DONE( INT_DZP ) ;               /* set done */
-            }
-            DEV_UPDATE_INTR ;                           /* update ints */
-#endif
             dzp_sta &= ~STA_CNTFUL;
             uptr->flags &= ~UNIT_BSY;
             dzp_sta = dzp_sta | (STA_SKDN0 >> u);   /* set controller seek done */
@@ -831,6 +813,7 @@ switch (pulse) {                                        /* decode IR<8:9> */
             }
         }                                           /* end case pulse */
 
+prevCP = MKCP(code,pulse);
 return rval;
 }
 
@@ -875,10 +858,11 @@ if (uptr->FUNC == FCCY_SEEK || uptr->FUNC == FCCY_RECAL) {
     uptr->flags &= ~UNIT_RDY;
     }
 if (iopP == pulse) {
-    // ZDF-1 pp. 101 clear the CNTFUL
     dzp_sta &= ~STA_CNTFUL;
-    // the controller can accept another command, while SEEK/RECAL in progress!
-    // then it waits until the prev. operation ends, and issues the command
+    /* ZDF-1 pp. 101 clear the CNTFUL
+     * the controller can accept another command, while SEEK/RECAL in progress!
+     * then it waits until the prev. operation ends, and issues the command
+     */
     }
 
 if ( DZP_TRACE(1) )
@@ -958,8 +942,7 @@ switch (uptr->FUNC) {                                   /* decode command */
         break;
 
     case FCCY_RECAL:                                    /* recalibrate */
-        // uptr->FUNC = FCCY_SEEK ;                     /* save command */
-        uptr->CYL  = 0 ;
+        uptr->CYL  = 0 ;                                /* keep recal cmd */
 
     case FCCY_SEEK:                                     /* seek */
         if ( ! (uptr->flags & UNIT_ATT) )               /* not attached? */
