@@ -415,6 +415,12 @@ int32 fpp1(int32 pulse, int32 code, int32 AC)
             store_sf(&sf1, &FPAC);
             SetFPAC(FPAC);
             break;
+        default:
+            if (FPP_TRACE(1)) {
+                printf(" unknown ");
+                fpp_break = 1;
+                }
+            break;
         }
 
     if (MODE_PAR) {
@@ -617,6 +623,12 @@ int32 fpp2(int32 pulse, int32 code, int32 AC)
             store_lf(&df1, &FPAC);
             SetFPAC(FPAC);
             break;
+        default:
+            if (FPP_TRACE(1)) {
+                printf(" unknown ");
+                fpp_break = 1;
+                }
+            break;
         }
 
     if (MODE_PAR) {
@@ -690,6 +702,12 @@ int32 fpp(int32 pulse, int32 code, int32 AC)
             fwait = 28;
             FPSR = AC;
             decode_sta("FWST", AC);
+            break;
+        default:
+            if (FPP_TRACE(1)) {
+                printf(" unknown ");
+                fpp_break = 1;
+                }
             break;
         }
 
