@@ -726,6 +726,15 @@ return SCPE_NXM;
 
 int32 cpu_trace = 0;
 #define CPU_TRACE(x)    (cpu_trace && (cpu_trace & (1 << (x))))
+#define CPU_TRACE_FP    stderr
+
+/*
+ *  CPU trace
+ *  =========
+ *
+ *      1 - trace every CPU instruction
+ *      2 - trace only IO instructions
+ */
 
 UNIT cpu_unit = {
     UDATA (NULL, UNIT_FIX+UNIT_BINK+UNIT_MDV,  DFTMEMSIZE /* MAXMEMSIZE */ )
@@ -841,6 +850,14 @@ static jmp_buf MapTrap;
     if (MapSingleCycle) { MapInstrAddr = PPC; MapStatus |= MAP_STA_SIM; } \
     if (MODE_USR == MapMode) longjmp(MapTrap, pc); \
     }
+
+static char * IOFuncs[8] =
+    { "NIO", "DIA", "DOA", "DIB", "DOB", "DIC", "DOC", "SKP" } ;
+static char * IOPulses[4] =
+    { "  ", "S ", "C ", "P " } ;
+static char * IOSkips[4] =
+    { "BN", "BZ", "DN", "DZ" } ;
+
 
 extern int32 fpp_break;
 
@@ -967,7 +984,7 @@ while (reason == 0) {                                   /* loop until halted */
     if ( hist_cnt )
         {
         int x = hist_save( MapLastPAddr, PC, IR ) ;     /*  PC, int_req unchanged */
-        if (CPU_TRACE(0)) hist_fprintf(stdout,1,&hist[x]);
+        if (CPU_TRACE(0)) hist_fprintf(stderr,1,&hist[x]);
         }
 
     INCREMENT_PC ;
@@ -1187,11 +1204,20 @@ while (reason == 0) {                                   /* loop until halted */
 
     else {                                              /* IOT */
         int32 dstAC, pulse, code, device, iodata;
+        static int32 prevCP = 0;
+        int32 doTrace = 0;
+#define MKCP(code,pulse)    (((code & 07) << 2) | (pulse & 03))
 
         dstAC = I_GETDST (IR);                          /* decode fields */
         code = I_GETIOT (IR);
         pulse = I_GETPULSE (IR);
         device = I_GETDEV (IR);
+
+        if (CPU_TRACE(1) && (MKCP(code,pulse) != prevCP)) {
+            doTrace = 1;
+            fprintf(CPU_TRACE_FP, "  [IOT:  %s%s %d,%02o ; %06o ", IOFuncs[code & 0x07], (7 == code ? IOSkips : IOPulses)[pulse & 0x03], dstAC, device, (AC[dstAC] & 0177777) ) ;
+            }
+
         if (IO_PROT) {
             if ((NIOC_MMPU != IR) && MapDevProt[HI(device)] & (1 << (7 - LO(device)))) {
                 MapStatus |= MAP_STA_IO;
@@ -1555,27 +1581,35 @@ while (reason == 0) {                                   /* loop until halted */
  *    Perform these non-supported device functions only if 'stop_dev'
  *    is zero (i.e. I/O access trap is not in effect).
  */
-    else if ( stop_dev == 0 )
-        {
-        switch (code)                                   /* decode IR<5:7> */
-            {
-        case ioDIA:
-        case ioDIB:
-        case ioDIC:
-            AC[dstAC] = 0 ;  /*  idle I/O bus data  */
-            break;
-
-        case ioSKP:
-            /*  (This should have been caught in previous CPU skip code)  */
-            if ( (pulse == 1 /* SKPBZ */) || (pulse == 3 /* SKPDZ */) )
+        else if ( stop_dev == 0 ) {
+            switch (code)                                   /* decode IR<5:7> */
                 {
-                INCREMENT_PC ;
-                }
-            }    /*  end of 'switch'  */
-        }    /*  end of handling non-existant device  */
-      else reason = stop_dev;
-      }                                                 /* end if IOT */
-    }                                                   /* end while */
+            case ioDIA:
+            case ioDIB:
+            case ioDIC:
+                AC[dstAC] = 0 ;  /*  idle I/O bus data  */
+                break;
+
+            case ioSKP:
+                /*  (This should have been caught in previous CPU skip code)  */
+                if ( (pulse == 1 /* SKPBZ */) || (pulse == 3 /* SKPDZ */) )
+                    {
+                    INCREMENT_PC ;
+                    }
+                }    /*  end of 'switch'  */
+            }    /*  end of handling non-existant device  */
+        else reason = stop_dev;
+
+    if ( doTrace ) {
+        if ( code & 1 ) {
+            fprintf( CPU_TRACE_FP, "  [%06o]  ", (AC[dstAC] & 0177777) ) ;
+            }
+        fprintf( CPU_TRACE_FP,  "]  \r\n" ) ;
+        prevCP = MKCP(code,pulse);
+        }
+
+    }                                                 /* end if IOT */
+}                                                   /* end while */
 
 /* Simulation halted */
 
