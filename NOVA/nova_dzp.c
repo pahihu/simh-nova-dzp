@@ -322,6 +322,7 @@ extern int32 saved_PC, SR, AMASK;
 int32 dzp_ma = 0;                                       /* memory address */
 int32 dzp_map = 0;                                      /* DCH map 0=A 3=B */
 int32 dzp_ussc = 0;                                     /* sf/sc/cnt */
+int32 dzp_extaddr = 0;                                  /* use extended add. */
 int32 dzp_ussc_ext = 0;                                 /* ext sf/sc/cnt */
 int32 dzp_fccy = 0;                                     /* flags/unit */
 int32 dzp_zccy = 0;                                     /* cylinder */
@@ -393,8 +394,10 @@ int32 GET_COUNT(int32 x, int32 dt)
     int32 ret;
 
     ret = x & USSC_M_ZCOUNT;
-    ret |= (dzp_ussc_ext >> (USSC_V_CNTMSB - 5)) & 040;
-    ret &= 077;
+    if (dzp_extaddr) {
+        ret |= (dzp_ussc_ext >> (USSC_V_CNTMSB - 5)) & 040;
+        ret &= 077;
+        }
     return ret;
 }
 
@@ -403,8 +406,10 @@ int32 GET_SECT(int32 x, int32 dt)
     int32 ret;
 
     ret = (x >> USSC_V_ZSECTOR) & USSC_M_ZSECTOR;
-    ret |= (dzp_ussc_ext >> (USSC_V_SECMSB - 5)) & 040;
-    ret &= 077;
+    if (dzp_extaddr) {
+        ret |= (dzp_ussc_ext >> (USSC_V_SECMSB - 5)) & 040;
+        ret &= 077;
+        }
     return ret;
 }
 
@@ -413,20 +418,24 @@ int32 GET_SURF(int32 x, int32 dt)
     int32 ret;
 
     ret = (x >> USSC_V_ZSURFACE) & USSC_M_ZSURFACE;
-    ret |= (dzp_ussc_ext >> (USSC_V_HDMSB - 5)) & 040;
-    ret &= 077;
+    if (dzp_extaddr) {
+        ret |= (dzp_ussc_ext >> (USSC_V_HDMSB - 5)) & 040;
+        ret &= 077;
+        }
     return ret;
 }
 
 void DZP_UPDATE_USSC(int32 dt, int32 count, int32 surf, int32 sect)
 {
-  int32 ncount;
-  
-  ncount = GET_COUNT(dzp_ussc, dt) + count;
-  dzp_ussc_ext = ((ncount & 040) << (USSC_V_CNTMSB-5)) 
-                 | ((sect & 040) << (USSC_V_SECMSB-5))
-                 | ((surf & 040) << (USSC_V_HDMSB-5));
-  dzp_ussc = ((ncount) & USSC_M_ZCOUNT)
+    int32 ncount;
+
+    ncount = GET_COUNT(dzp_ussc, dt) + count;
+    if (dzp_extaddr) {
+        dzp_ussc_ext = ((ncount & 040) << (USSC_V_CNTMSB-5)) 
+                     | ((sect & 040) << (USSC_V_SECMSB-5))
+                     | ((surf & 040) << (USSC_V_HDMSB-5));
+        }
+    dzp_ussc = ((ncount) & USSC_M_ZCOUNT)
         | ((surf & USSC_M_ZSURFACE) << USSC_V_ZSURFACE)
         | ((sect & USSC_M_ZSECTOR) << USSC_V_ZSECTOR);
 }
@@ -715,8 +724,11 @@ switch (code) {                                         /* decode IR<5:7> */
             else {
                 TRACEP(0," SSSC  %06o",AC);
                 if (CP_DOC == prevCP) {                 /* double DOC addressing */
+                    dzp_extaddr = 1;
                     dzp_ussc_ext = dzp_ussc;
-                }
+                    }
+                else
+                    dzp_extaddr = 0;
                 dzp_ussc = AC;
                 }
             TRACEP(7," SURF=%02d SECT=%02d CNT=%02d ",GET_SURF(dzp_ussc,dtype),GET_SECT(dzp_ussc,dtype),GET_COUNT(dzp_ussc,dtype));
@@ -875,7 +887,7 @@ if ( DZP_TRACE(1) )
     xSect = GET_SECT(dzp_ussc, dtype) ;
     xSurf = GET_SURF(dzp_ussc, dtype) ;
     xCyl  = GET_CYL (dzp_fccy, dtype) ;
-    xCnt  = 64 - (GET_COUNT(dzp_ussc, dtype)) ;
+    xCnt  = (dzp_extaddr ? 64 : 32) - (GET_COUNT(dzp_ussc, dtype)) ;
 
     dprintf("  [%s:%c  %-5s:  %3d / %2d / %2d   %2d   %06o ] \r\n",
             "DZP",
@@ -1176,6 +1188,7 @@ DEV_CLR_BUSY( INT_DZP ) ;                               /*  clear busy    */
 DEV_CLR_DONE( INT_DZP ) ;                               /*  clear done    */
 DEV_UPDATE_INTR ;                                       /*  update ints    */
 dzp_fccy = dzp_ussc = dzp_ma = dzp_sta = 0;             /* clear registers */
+dzp_extaddr = 0;                                        /* clear ext. addr */
 dzp_ussc_ext = dzp_zunit = dzp_zccy = 0;
 dzp_diagmode = 0;                                       /* clear diagnostic mode */
 dzp_map = 0;
