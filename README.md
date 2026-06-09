@@ -4,15 +4,15 @@ DZP disk controller N3MORT L
 ============================
 
 The Nova 3 MORT long version contains reliability tests for the DZP disk controller.
-I have fixed the DZP corner cases, so N3MORT L passed.
+I have fixed the DZP controller (which is based on the ZETACO ZDF-1 docs) corner cases, so N3MORT L passed.
 
 Milestones
 
 * don not set CYLADD in transfer status
 * transfer status RWFLT set on transfer status error flags (not STA_EFLGS)
 * not attached drive reports busy
-* fixed ZETACO ZDF-1 double DOC addressing detection (N3MORT L uses single)
-* fixed ZETACO ZDF-1 extended surface/sector/count calculations
+* fixed double DOC addressing detection (N3MORT L uses single)
+* fixed extended surface/sector/count calculations
 
 
 Nova FPU in Fixnum days
